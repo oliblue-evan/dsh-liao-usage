@@ -123,7 +123,7 @@ test('分隔点与官方同构：包在 label 里，不是 pill 的平级 flex �
   // .umSep 的 margin:0 6px 上，点两侧变成 12px（实测比官方宽一倍）。
   assert.match(
     source,
-    /h\('span', \{ className: 'umLabel' \}, labelParts\)/,
+    /h\('span', \{ (?:key: 'label', )?className: 'umLabel' \}, labelParts\)/,
     '文字段与分隔点应同包在一个 umLabel span 里',
   );
   assert.match(source, /\.umSep\{color:var\(--dsw-alias-separator-primary\);margin:0 6px\}/, '间距数值应与官方一致（0 6px）');

@@ -1,11 +1,10 @@
 # dsh-usage-pill 🧮
 
-> **English quick start** — A DSH plugin that shows session **token usage**, **cost priced
-> at each request's own time and model** (peak/off-peak, per model tier), and your
+> **English quick start** — A DSH plugin that shows session **token usage**, **reference costs using DeepSeek rates at each request time and model tier** (peak/off-peak, per model tier), and your
 > **account balance** in one pill below the composer. It needs **no API key** when you are
 > signed in to a DeepSeek account (it reads the account balance through the harness's own
 > account remote, falling back to `DEEPSEEK_API_KEY`). It is a single-file client bundle
-> with a dependency-free host half, and ships 58 assertions (`npm test`). MIT licensed.
+> with a dependency-free host half, and ships 69 assertions (`npm test`). MIT licensed.
 > Install: `plugin_manager(action: "install_bundle", target: "github:oliblue-evan/dsh-usage-pill")`, then
 > reload the page.
 
@@ -17,6 +16,21 @@ DeepSeek **用量与余额**：输入框下方一枚徽标，实时显示本会�
 > 已登录 DeepSeek 账号的用户走宿主自己的账号授权（`ctx.remote.account.getBalance`），
 > 密钥全程不出现；只有「没登录、只有 API Key」的用户才回落到宿主路由。
 > 据我看到的同类插件，真实余额普遍要求你自行配置 API Key。
+
+## 金额说明
+
+**费用是参考估算，余额是接口返回值。** 本插件按 DeepSeek 价表、每笔事件时间和模型档位换算；第三方渠道及自定义模型也沿用这套规则，无法代表对应渠道的真实账单。下文的「逐笔实际发生额」指按事件时刻累计的参考结果，而不是渠道已结算金额。
+
+## 1.1.0：弹层与余额查询修复
+
+- 打开时在首次绘制前定位浮框；余额返回、内容增高、滚动与视口变化时重新定位。过高内容可在框内滚动。
+- 提供关闭按钮；Esc 关闭并返回胶囊焦点，外部点击关闭，内部刷新不会误关。
+- 余额请求去重并共享 60 秒缓存；手动刷新绕过缓存。账号和 API Key 路径均有超时边界。
+- 查询失败仍显示重试入口；已有余额在刷新失败后保留，并标注「显示上次余额」，不会把网络错误误报为未配置密钥。
+- 优先显示人民币余额，其它币种单独列出；仅显示余额但余额不可用时仍保留费用入口。
+- 补充会话 token 总量，明确区分当前参考单价与按历史用量累计的金额；兼容原有显示偏好与按模型统计。
+- 费用统一标为「参考费用」并加 ≈；账户余额仍为接口返回值。
+- 开发依赖仅用于界面回归测试，插件运行时仍无额外依赖。新增用例验证首帧定位、反复开关、动态尺寸、关闭焦点、失败重试、请求去重、超时与宿主缓存。
 
 ## 截图
 
@@ -378,7 +392,7 @@ curl -s "http://127.0.0.1:19387/plugins/<id>/client.js&rev=<rev>"
 
 ## 验证
 
-`npm test`（= `node --test test/*.test.mjs`）跑 **58 项断言**，9 个文件各管一层：
+`npm test`（= `node --test test/*.test.mjs`）跑 **69 项断言**，覆盖纯逻辑、宿主路由与真实 React 弹层行为：
 
 | 文件 | 断言 | 覆盖 |
 |---|---|---|
@@ -390,6 +404,8 @@ curl -s "http://127.0.0.1:19387/plugins/<id>/client.js&rev=<rev>"
 | `structure.test.mjs` | 6 | `client.js` 的 `#region 纯逻辑` 标记唯一、区块内确有测试依赖的符号、**区块内无 React/DOM**、文件头保留单文件理由、**样式必须插件级注入**（不能塞在某个槽位的组件树里）、**开关样式必须带 `!important`** |
 | `packaging.test.mjs` | 3 | **打包契约**：`exports` 暴露元数据子路径、`locale/en.json` 存在且字段非空、图标满足 `iconOf` 的全部规则 |
 | `no-bare-imports.test.mjs` | 3 | **宿主半边不得出现裸模块名**（含动态 `import()`），且不再引用 zod |
+| `client-ui.test.mjs` | 9 | React 首帧定位、反复开关与尺寸变化、内外点击与 Esc 焦点、失败重试、缓存去重、超时取消、余额入口兜底与多币种 |
+| `balance-route.test.mjs` | 2 | 同源与 POST 限制、自动缓存、手动刷新、并发去重与实例隔离 |
 | `pricing-parity.test.mjs` | 3 | **防漂移门禁**：宿主 `lib/pricing.js` 与客户端内嵌的价目表/节假日表/高峰窗口逐字段一致 |
 
 另外：

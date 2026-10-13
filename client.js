@@ -36,7 +36,7 @@ window.__ModuleLoader__.load({
   factory(require) {
     const React = require('react');
     const h = React.createElement;
-    const { useState, useEffect, useRef, useCallback } = React;
+    const { useState, useEffect, useLayoutEffect, useRef, useCallback, useId } = React;
     const { createPortal } = require('react-dom');
 
     /**
@@ -418,8 +418,8 @@ window.__ModuleLoader__.load({
       'settings.note': '改动立即生效。只影响显示，存在本地浏览器；计价口径与价目表按官方政策内置在插件里。',
       'settings.pillPeriod': '徽标显示时段图标',
       'settings.pillPeriodHint': '太阳＝高峰、月亮＝空闲；关掉则用通用图标',
-      'settings.pillCost': '徽标显示当前花费',
-      'settings.pillCostHint': '本会话累计费用',
+      'settings.pillCost': '徽标显示参考费用',
+      'settings.pillCostHint': '按 DeepSeek 价表换算，渠道账单可能不同',
       'settings.pillBalance': '徽标显示账户余额',
       'settings.pillBalanceHint': '取不到余额时该段自动消失',
       'settings.hideEmptyBuckets': '隐藏零值桶',
@@ -427,6 +427,11 @@ window.__ModuleLoader__.load({
       'settings.showSaved': '显示「缓存已省」',
       'settings.showSavedHint': '命中的 token 若按未命中价计要多花多少',
       'panel.title': '用量与余额',
+      'panel.close': '关闭用量详情',
+      'panel.session': '本会话',
+      'panel.balanceFailed': '余额暂不可用',
+      'panel.retry': '重试查询余额',
+      'panel.stale': '刷新失败 · 显示上次余额',
       'panel.balance': '账户余额',
       'panel.balanceBonus': '含赠送',
       'panel.sourceAccount': '账号',
@@ -439,18 +444,19 @@ window.__ModuleLoader__.load({
       'panel.miss': '缓存未命中',
       'panel.write': '缓存写入',
       'panel.out': '输出',
-      'panel.breakdown': '本会话花费',
+      'panel.breakdown': '本会话参考费用',
       'panel.noUsageYet': '本会话暂无用量',
       'panel.unit': '元 / 百万 tokens',
       'panel.afterSwitch': '后切换',
       'panel.saved': '缓存已省',
       'panel.savedNote': '按当前价',
-      'panel.actual': '金额：按每笔用量实际发生的时刻与模型计',
-      'panel.estimated': '金额：按当前价估算（宿主投影不可用）',
+      'panel.actual': '参考费用：按每笔用量的时刻与模型档位套用 DeepSeek 价表，非渠道账单',
+      'panel.estimated': '参考费用：累计用量 × 当前 DeepSeek 单价（历史计价不可用）',
       'panel.noUsage': '用量投影不可用，暂时算不出金额',
       'panel.tierUnknown': '未识别到模型 · 按 {tier} 档计',
-      'panel.byModel': '按模型',
+      'panel.byModel': '按模型 · 参考费用',
       'panel.unitMulti': '单价是当前模型（{model}）的价；上面的金额是全部模型累计的',
+      'panel.currentRates': '采用 DeepSeek 价表 · 渠道账单可能不同',
       'panel.beijing': '北京时间',
       'panel.timeline': '今日时段轴（北京时间）',
             'panel.peakTimes': '高峰单价 ×{mult}',
@@ -467,7 +473,7 @@ window.__ModuleLoader__.load({
       'settings.pillPeriod': 'Period icon on the pill',
       'settings.pillPeriodHint': 'Sun = peak, moon = off-peak; off falls back to the generic icon',
       'settings.pillCost': 'Cost on the pill',
-      'settings.pillCostHint': 'Total for this session',
+      'settings.pillCostHint': 'Reference cost using DeepSeek rates; channel invoices may differ',
       'settings.pillBalance': 'Balance on the pill',
       'settings.pillBalanceHint': 'The segment hides itself when unavailable',
       'settings.hideEmptyBuckets': 'Hide empty buckets',
@@ -475,6 +481,11 @@ window.__ModuleLoader__.load({
       'settings.showSaved': 'Show "saved by cache"',
       'settings.showSavedHint': 'What cache hits would have cost at the miss price',
       'panel.title': 'Usage & balance',
+      'panel.close': 'Close usage details',
+      'panel.session': 'This session',
+      'panel.balanceFailed': 'Balance unavailable',
+      'panel.retry': 'Retry balance query',
+      'panel.stale': 'Refresh failed · showing last balance',
       'panel.balance': 'Balance',
       'panel.balanceBonus': 'incl. bonus',
       'panel.sourceAccount': 'account',
@@ -487,18 +498,19 @@ window.__ModuleLoader__.load({
       'panel.miss': 'Cache miss',
       'panel.write': 'Cache write',
       'panel.out': 'Output',
-      'panel.breakdown': 'Session cost',
+      'panel.breakdown': 'Session reference cost',
       'panel.noUsageYet': 'No usage yet in this session',
       'panel.unit': 'CNY / million tokens',
       'panel.afterSwitch': 'until switch',
       'panel.saved': 'Saved by cache',
       'panel.savedNote': 'at current rates',
-      'panel.actual': 'Cost priced per event, at each request\u2019s own time and model',
+      'panel.actual': 'Reference cost at each request time and tier using DeepSeek rates, not a channel invoice',
       'panel.estimated': 'Cost estimated at current rates (host projection unavailable)',
       'panel.noUsage': 'Usage projection unavailable; cost cannot be computed',
       'panel.tierUnknown': 'model unknown \u00b7 priced as {tier}',
-      'panel.byModel': 'By model',
+      'panel.byModel': 'By model · reference cost',
       'panel.unitMulti': 'Unit price is for the current model ({model}); the amounts above total every model',
+      'panel.currentRates': 'Uses DeepSeek rates · channel invoices may differ',
       'panel.beijing': 'Beijing time',
       'panel.timeline': 'Today in Beijing time',
             'panel.peakTimes': 'peak ×{mult}',
@@ -528,7 +540,7 @@ window.__ModuleLoader__.load({
 /* 分隔点的间距**只有**这 6px：官方把它放在 inline 的 label 里，pill 的 gap 不作用于它。
    若把点做成 pill 的平级 flex 子元素，gap:6px 会叠加成 12px。数值与官方原件一致。 */
 .umSep{color:var(--dsw-alias-separator-primary);margin:0 6px}
-.umPanel{z-index:1100;box-sizing:border-box;border-radius:var(--dsw-radius-lg);background:var(--dsw-specific-menu);
+.umPanel{z-index:1100;max-height:calc(100dvh - 24px);overflow-y:auto;overscroll-behavior:contain;box-sizing:border-box;border-radius:var(--dsw-radius-lg);background:var(--dsw-specific-menu);
   width:max-content;min-width:min(300px,100vw - 24px);max-width:min(440px,100vw - 24px);
   backdrop-filter:var(--dsw-menu-backdrop-filter);
   --dsw-elevation-stroke-color:var(--dsw-alias-border-l1);box-shadow:var(--dsw-elevation-prominent);
@@ -537,6 +549,10 @@ window.__ModuleLoader__.load({
   font-weight:500;display:flex}
 .umTitleRule{border-top:.5px solid var(--dsw-alias-border-l2);margin-bottom:10px}
 .umTitleValue{font-variant-numeric:tabular-nums}
+.umClose{border:0;background:transparent;color:var(--dsw-alias-label-tertiary);font:inherit;font-size:20px;line-height:24px;flex:none;width:24px;height:24px;border-radius:5px;cursor:pointer}
+.umClose:hover{background:var(--dsw-alias-interactive-bg-hover)}
+.umClose:focus-visible,.umRefresh:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:1px}
+.umTitleValue{margin-left:auto}
 .umTitleLabel{align-items:center;gap:6px;min-width:0;display:inline-flex}
 .umTitleLabel svg{flex:none;width:14px;height:14px}
 .umDetails{color:var(--dsw-alias-label-tertiary);grid-template-columns:minmax(76px,auto) minmax(0,1fr);
@@ -627,66 +643,170 @@ window.__ModuleLoader__.load({
 
     function useAnchoredPosition(open, anchorRef, panelRef) {
       const [pos, setPos] = useState(null);
-      const last = useRef('');
-      useEffect(() => {
-        if (!open) { setPos(null); last.current = ''; return undefined; }
+      useLayoutEffect(() => {
+        if (!open) { setPos(null); return undefined; }
         let frame = 0;
+        let disposed = false;
         const place = () => {
+          if (disposed) return;
           const anchor = anchorRef.current;
           const panel = panelRef.current;
-          if (anchor === null || panel === null) return;
+          if (!anchor || !panel) return;
           const box = anchor.getBoundingClientRect();
           const size = panel.getBoundingClientRect();
-          const maxLeft = Math.max(PANEL_MARGIN, window.innerWidth - size.width - PANEL_MARGIN);
-          const left = Math.min(Math.max(box.left + box.width / 2 - size.width / 2, PANEL_MARGIN), maxLeft);
+          const viewport = window.visualViewport;
+          const width = viewport ? viewport.width : window.innerWidth;
+          const height = viewport ? viewport.height : window.innerHeight;
+          const offsetLeft = viewport ? viewport.offsetLeft : 0;
+          const offsetTop = viewport ? viewport.offsetTop : 0;
+          const minLeft = offsetLeft + PANEL_MARGIN;
+          const minTop = offsetTop + PANEL_MARGIN;
+          const maxLeft = Math.max(minLeft, offsetLeft + width - size.width - PANEL_MARGIN);
+          const left = Math.min(Math.max(box.left + box.width / 2 - size.width / 2, minLeft), maxLeft);
           let top = box.top - size.height - PANEL_GAP;
-          if (top < PANEL_MARGIN) {
+          if (top < minTop) {
             const below = box.bottom + PANEL_GAP;
-            top = below + size.height + PANEL_MARGIN <= window.innerHeight
-              ? below
-              : Math.max(PANEL_MARGIN, window.innerHeight - size.height - PANEL_MARGIN);
+            top = below + size.height + PANEL_MARGIN <= offsetTop + height
+              ? below : Math.max(minTop, offsetTop + height - size.height - PANEL_MARGIN);
           }
           const next = { left: Math.round(left), top: Math.round(top), visibility: 'visible' };
-          const key = next.left + ':' + next.top;
-          if (key === last.current) return;
-          last.current = key;
-          setPos(next);
+          setPos((previous) => previous && previous.left === next.left && previous.top === next.top
+            && previous.visibility === next.visibility ? previous : next);
         };
         const schedule = () => {
-          if (frame !== 0) return;
+          if (frame || disposed) return;
           frame = window.requestAnimationFrame(() => { frame = 0; place(); });
         };
-        schedule();
+        // 在首次绘制前完成定位，避免隐藏的 backdrop-filter 层延迟绘制。
+        place();
+        const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(schedule) : null;
+        if (observer) {
+          observer.observe(anchorRef.current);
+          observer.observe(panelRef.current);
+        }
         window.addEventListener('resize', schedule);
         window.addEventListener('scroll', schedule, true);
+        const viewport = window.visualViewport;
+        if (viewport) {
+          viewport.addEventListener('resize', schedule);
+          viewport.addEventListener('scroll', schedule);
+        }
         return () => {
-          if (frame !== 0) window.cancelAnimationFrame(frame);
+          disposed = true;
+          if (frame) window.cancelAnimationFrame(frame);
+          if (observer) observer.disconnect();
           window.removeEventListener('resize', schedule);
           window.removeEventListener('scroll', schedule, true);
+          if (viewport) {
+            viewport.removeEventListener('resize', schedule);
+            viewport.removeEventListener('scroll', schedule);
+          }
         };
       }, [open]);
       return pos;
     }
 
-    /**
-     * 指针落在触发元素与面板之外时收起。
-     * @param open - 是否展开。
-     * @param setOpen - 展开状态写入。
-     * @param rootRef - 触发元素所在子树。
-     * @param panelRef - 面板。
-     */
+    /** 两个 DOM 子树共同组成弹层；Escape 返回触发按钮，外点保留新焦点。 */
     function useDismissOnOutsidePointer(open, setOpen, rootRef, panelRef) {
       useEffect(() => {
         if (!open) return undefined;
         const onPointerDown = (event) => {
-          const target = event.target;
-          if (rootRef.current !== null && rootRef.current.contains(target)) return;
-          if (panelRef.current !== null && panelRef.current.contains(target)) return;
+          const path = typeof event.composedPath === 'function' ? event.composedPath() : [];
+          if ([rootRef.current, panelRef.current].some((node) => node
+            && (path.includes(node) || node.contains(event.target)))) return;
           setOpen(false);
         };
+        const onKeyDown = (event) => {
+          if (event.key !== 'Escape') return;
+          event.stopPropagation();
+          setOpen(false);
+          rootRef.current?.querySelector('button')?.focus({ preventScroll: true });
+        };
         document.addEventListener('pointerdown', onPointerDown, true);
-        return () => document.removeEventListener('pointerdown', onPointerDown, true);
-      }, [open]);
+        document.addEventListener('keydown', onKeyDown, true);
+        return () => {
+          document.removeEventListener('pointerdown', onPointerDown, true);
+          document.removeEventListener('keydown', onKeyDown, true);
+        };
+      }, [open, setOpen]);
+    }
+
+    /** 余额请求共享缓存与进行中的 Promise，切换会话不会重复请求。 */
+    let balanceCache = null;
+    let balanceRequest = null;
+    const REQUEST_TIMEOUT_MS = 15000;
+    const errorText = (error) => String(error?.message || error || 'Unknown error')
+      .replace(/sk-[A-Za-z0-9]{6,}/gi, 'sk-***');
+
+    function withDeadline(task) {
+      let timer;
+      return Promise.race([
+        Promise.resolve().then(task),
+        new Promise((_, reject) => { timer = window.setTimeout(() => reject(new Error('Balance request timed out')), REQUEST_TIMEOUT_MS); }),
+      ]).finally(() => window.clearTimeout(timer));
+    }
+
+    function requestBalance(force = false) {
+      if (balanceRequest) return balanceRequest;
+      if (!force && balanceCache && Date.now() - balanceCache.at < BALANCE_FRESH_MS) {
+        return Promise.resolve({ balance: balanceCache, error: null, accountError: null });
+      }
+      balanceRequest = (async () => {
+        let accountError = null;
+        try {
+          if (ACCOUNT && typeof ACCOUNT.getBalance === 'function') {
+            let localeId = 'zh-CN';
+            try { localeId = LOCALE?.getSnapshot()?.active || localeId; } catch { /* 默认语言 */ }
+            const result = await withDeadline(() => ACCOUNT.getBalance({
+              version: '0.2.0-rc.2', locale: localeId,
+              timezoneOffsetSeconds: -new Date().getTimezoneOffset() * 60,
+            }));
+            if (result?.ok) {
+              const normalized = fromAccountBalance(result.value);
+              if (normalized) {
+                balanceCache = normalized;
+                return { balance: normalized, error: null, accountError: null };
+              }
+            } else if (result) accountError = errorText(result.error || 'Account balance unavailable');
+          }
+        } catch (error) { accountError = errorText(error); }
+        const controller = new AbortController();
+        try {
+          const data = await withDeadline(async () => {
+            const response = await fetch(BALANCE_API, { method: 'POST', signal: controller.signal,
+              headers: force ? { 'x-usage-pill-refresh': '1' } : undefined });
+            return response.json();
+          });
+          const normalized = data?.ok ? fromKeyBalance(data) : null;
+          if (!normalized) throw new Error(data?.error || 'Balance unavailable');
+          balanceCache = normalized;
+          return { balance: normalized, error: null, accountError };
+        } catch (error) {
+          return { balance: balanceCache, error: errorText(error), accountError };
+        } finally { controller.abort(); }
+      })().finally(() => { balanceRequest = null; });
+      return balanceRequest;
+    }
+
+    function useBalance(open) {
+      const [result, setResult] = useState(() => ({ balance: balanceCache, error: null, accountError: null }));
+      const [busy, setBusy] = useState(false);
+      const alive = useRef(false);
+      const load = useCallback(async (force = true) => {
+        if (alive.current) setBusy(true);
+        const next = await requestBalance(force);
+        if (alive.current) { setResult(next); setBusy(false); }
+      }, []);
+      useEffect(() => {
+        alive.current = true;
+        load(false);
+        return () => { alive.current = false; };
+      }, [load]);
+      useEffect(() => {
+        if (open) load(false);
+      }, [open, load]);
+      return { balance: result.balance, balanceError: result.error, accountError: result.accountError,
+        balanceBusy: busy, loadBalance: () => load(true) };
     }
 
     // ========================================================================
@@ -938,77 +1058,16 @@ window.__ModuleLoader__.load({
 
       const [now, setNow] = useState(() => Date.now());
       const [open, setOpen] = useState(false);
-      const [balance, setBalance] = useState(null);
-      const [balanceError, setBalanceError] = useState(null);
-      // 账号链路的失败原因单独留一份：它被 API Key 兜底盖住的话，真实故障会被
-      // 误报成"未配置 API Key"，排查方向就跑偏了。
-      const [accountError, setAccountError] = useState(null);
-      const [balanceBusy, setBalanceBusy] = useState(false);
+      const { balance, balanceError, accountError, balanceBusy, loadBalance } = useBalance(open);
       const rootRef = useRef(null);
       const panelRef = useRef(null);
+      const panelId = useId();
       const pos = useAnchoredPosition(open, rootRef, panelRef);
       useDismissOnOutsidePointer(open, setOpen, rootRef, panelRef);
-
-      /**
-       * 取余额。**账号优先、API Key 兜底**：
-       *
-       *   1) `ctx.remote.account.getBalance(client)` —— 与官方账号页同一条链路，
-       *      用你已经登录的授权，不需要 API Key（返回 null 表示未登录）；
-       *   2) 宿主路由 —— 给只有 API Key、没登录账号的用户兜底；
-       *   3) 都没有就如实说明，不编数字。
-       *
-       * 客户端元数据按官方账号页的原样构造（version / locale / timezoneOffsetSeconds）。
-       */
-      const loadBalance = useCallback(async () => {
-        setBalanceBusy(true);
-        try {
-          // 账号链路失败（未登录 / 服务不可用 / 守卫拒绝）都不该让整次查询失败，
-          // 所以单独包一层，失败就安静地落到 API Key 兜底。
-          try {
-            const account = ACCOUNT;
-            if (account !== undefined && typeof account.getBalance === 'function') {
-              let localeId = 'zh-CN';
-              try {
-                const snapshot = LOCALE !== undefined && typeof LOCALE.getSnapshot === 'function' ? LOCALE.getSnapshot() : undefined;
-                if (snapshot && typeof snapshot.active === 'string' && snapshot.active) localeId = snapshot.active;
-              } catch { /* 取不到就用默认语言 */ }
-              const result = await account.getBalance({
-                version: '0.2.0-rc.2',
-                locale: localeId,
-                timezoneOffsetSeconds: -new Date().getTimezoneOffset() * 60,
-              });
-              if (result && result.ok) {
-                const normalized = fromAccountBalance(result.value);
-                if (normalized !== null) {
-                  setBalance(normalized);
-                  setBalanceError(null);
-                  setAccountError(null);
-                  return;
-                }
-                // value 为 null → 当前没有账号授权，落到 API Key 兜底
-              }
-            }
-          } catch (error) {
-            // 账号路径不可用：记下原因，继续走 API Key 兜底（两条都失败时如实显示）
-            setAccountError(String(error && error.message ? error.message : error));
-          }
-          const response = await fetch(BALANCE_API, { method: 'POST' });
-          const data = await response.json();
-          if (data && data.ok) {
-            setBalance(fromKeyBalance(data));
-            setBalanceError(null);
-          } else {
-            setBalanceError(data && data.error ? String(data.error) : '未知错误');
-          }
-        } catch (error) {
-          setBalanceError(String(error && error.message ? error.message : error));
-        } finally {
-          setBalanceBusy(false);
-        }
-      }, []);
-
-      // 挂载时取一次（每次页面加载一次请求，不是轮询）。
-      useEffect(() => { loadBalance(); }, [loadBalance]);
+      const closePanel = () => {
+        setOpen(false);
+        rootRef.current?.querySelector('button')?.focus({ preventScroll: true });
+      };
 
       // 计时：30 秒一格 —— 够跟上峰谷切换与时段轴上的"现在"。倒计时的每秒刷新
       // 由子组件 Countdown 自理，整个面板不必每秒重渲染。
@@ -1027,21 +1086,6 @@ window.__ModuleLoader__.load({
         document.addEventListener('visibilitychange', onVisibility);
         return () => { stop(); document.removeEventListener('visibilitychange', onVisibility); };
       }, []);
-
-      // 面板打开且余额已过期 → 重取。
-      useEffect(() => {
-        if (!open) return;
-        if (balance === null) return;
-        if (Date.now() - (Number(balance.at) || 0) > BALANCE_FRESH_MS) loadBalance();
-      }, [open, balance, loadBalance]);
-
-      // Esc 收起。
-      useEffect(() => {
-        if (!open) return undefined;
-        const onKeyDown = (event) => { if (event.key === 'Escape') setOpen(false); };
-        document.addEventListener('keydown', onKeyDown);
-        return () => document.removeEventListener('keydown', onKeyDown);
-      }, [open]);
 
       const tier = tierOfModel(model);
       const hasUsage = usage !== undefined && usage !== null;
@@ -1074,6 +1118,7 @@ window.__ModuleLoader__.load({
       const tokens = hasUsage ? totalTokens(usage) : null;
       /** 金额文案：拿不到用量时显示破折号，而不是 ¥0（那会被读成"免费"）。 */
       const moneyText = (value) => (value === null || value === undefined ? '—' : fmtMoney(value));
+      const totalText = totalMoney === null ? '—' : '≈' + fmtMoney(totalMoney);
       /** token 数只在 tooltip 里给精确值 —— 面板正文放 1.45 亿这种数字只会抢视线。 */
       const tokenTitle = (value) => (value === null || value === undefined
         ? undefined
@@ -1093,9 +1138,9 @@ window.__ModuleLoader__.load({
       const totalTitle = [moneySource, tokenTitle(tokens)].filter(Boolean).join(' · ');
 
       const wallets = balance === null ? [] : balance.wallets;
-      // 主币种取金额最大的那个；其余币种另行列出，绝不加在一起。
+      // 元计费界面优先显示人民币；其它币种分别列出，不比较跨币种面额。
       const primary = wallets.length > 0
-        ? wallets.reduce((best, wallet) => (wallet.total > best.total ? wallet : best), wallets[0])
+        ? (wallets.find((wallet) => wallet.currency === 'CNY') || wallets[0])
         : null;
       const balanceText = primary === null ? null : fmtMoney(primary.total, symbolOf(primary.currency));
       const bonusText = primary !== null && primary.bonus > 0 ? fmtMoney(primary.bonus, symbolOf(primary.currency)) : null;
@@ -1103,9 +1148,7 @@ window.__ModuleLoader__.load({
       const sourceText = balance === null ? '' : (balance.source === 'account' ? t('panel.sourceAccount') : t('panel.sourceKey'));
       // 余额取不到时的说明：**可见文案保持简短**（两条技术错误拼一行会撑破版面），
       // 完整原因进 tooltip —— 既不丢信息，也不破坏排版。
-      const balanceFailure = accountError !== null
-        ? t('panel.accountFailed') + (balanceError === null ? '' : ' · ' + t('panel.keyFailed'))
-        : (balanceError === null ? t('panel.balanceLoading') : t('panel.keyFailed'));
+      const balanceFailure = balanceError !== null ? t('panel.balanceFailed') : t('panel.balanceLoading');
       const balanceFailureTitle = [accountError, balanceError].filter(Boolean).join(' · ');
 
       /** 计价表：一行一个桶 —— 名称 / 当前单价 / 本会话花费（token 数进 tooltip）。 */
@@ -1123,7 +1166,7 @@ window.__ModuleLoader__.load({
         : String(model);
 
       /** 单价列的口径提示：换过模型时，单价是**当前模型**的、金额是**全部模型**累计的。 */
-      const unitNote = modelRows.length > 1 ? t('panel.unitMulti', { model: modelText }) : undefined;
+      const unitNote = t('panel.unitMulti', { model: modelText });
       /**
        * 分模型区块。合计是跨模型累加的，换过模型之后这一块才说清"各花了多少"；
        * 只有一个模型时 `modelRowsOf` 返回空，整块不渲染。
@@ -1136,6 +1179,7 @@ window.__ModuleLoader__.load({
       const portalHost = typeof document === 'undefined' ? null : (document.body || document.documentElement);
       const panel = open && portalHost !== null ? createPortal(h('div', {
         ref: panelRef,
+        id: panelId, tabIndex: -1,
         className: 'umPanel',
         role: 'dialog',
         'aria-label': t('panel.title'),
@@ -1143,33 +1187,32 @@ window.__ModuleLoader__.load({
       },
       h('div', { className: 'umTitle' },
         h('span', { className: 'umTitleLabel' }, h(MeterIcon), t('panel.title')),
-        h('span', { className: 'umTitleValue', title: totalTitle }, moneyText(totalMoney))),
+        h('span', { className: 'umTitleValue', title: totalTitle }, totalText),
+        h('button', { className: 'umClose', type: 'button', title: t('panel.close'),
+          'aria-label': t('panel.close'), onClick: closePanel }, '×')),
+      h('div', { className: 'umSect', title: tokenTitle(tokens) }, t('panel.session') + ' · ' + (tokens === null ? '—' : fmtExactTokens(tokens) + ' tok')),
       h('div', { className: 'umTitleRule', 'aria-hidden': true }),
       // 概览：账户余额（可刷新）与缓存省下的钱 —— 这两条是"状态"，不是"构成"
       h('dl', { className: 'umDetails' },
         h('dt', null, t('panel.balance')),
-        h('dd', null, balanceText !== null
-          ? h(React.Fragment, null,
-            h('span', { title: sourceText },
-              balanceText + (bonusText === null ? '' : '（' + t('panel.balanceBonus') + ' ' + bonusText + '）')),
-            otherWallets.map((wallet) => h('div', { key: wallet.currency },
-              '+' + fmtMoney(wallet.total, symbolOf(wallet.currency)))),
-            h('button', {
-              type: 'button',
-              className: 'umRefresh',
-              title: t('panel.balanceRefresh'),
-              'aria-label': t('panel.balanceRefresh'),
-              disabled: balanceBusy,
-              onClick: loadBalance,
-            }, h(RefreshIcon)))
-          : h('span', { title: balanceFailureTitle || undefined },
-            balanceBusy ? t('panel.balanceLoading') : balanceFailure)),
+        h('dd', null,
+          balanceText !== null
+            ? h(React.Fragment, null,
+              h('span', { title: sourceText }, balanceText + (bonusText === null ? '' : '（' + t('panel.balanceBonus') + ' ' + bonusText + '）')),
+              otherWallets.map((wallet) => h('div', { key: wallet.currency }, '+' + fmtMoney(wallet.total, symbolOf(wallet.currency)))))
+            : h('span', { title: balanceFailureTitle || undefined }, balanceBusy ? t('panel.balanceLoading') : balanceFailure),
+          h('button', { type: 'button', className: 'umRefresh',
+            title: balanceFailureTitle || t('panel.balanceRefresh'),
+            'aria-label': balanceError ? t('panel.retry') : t('panel.balanceRefresh'),
+            disabled: balanceBusy, onClick: loadBalance }, h(RefreshIcon)),
+          balanceText !== null && balanceError ? h('div', { className: 'umNote', role: 'status', title: balanceFailureTitle }, t('panel.stale')) : null),
         saved === null || !settings.showSaved ? null : h(React.Fragment, null,
           h('dt', null, t('panel.saved')),
           h('dd', null, h('span', { className: 'umSaved', title: t('panel.savedNote') }, fmtMoney(saved))))),
       h('div', { className: 'umTitleRule', 'aria-hidden': true }),
       // 花费构成：沿用宿主统计弹层的 dt/dd 两列，一行一个桶；精确 token 数进 tooltip
       h('div', { className: 'umSect' }, t('panel.breakdown') + '（' + t('panel.unit') + '）'),
+      pricedView !== null ? h('div', { className: 'umNote', style: { marginTop: 0, marginBottom: 8 } }, t('panel.currentRates')) : null,
       h('dl', { className: 'umDetails' },
         shownRows.length === 0
           ? h('dd', { className: 'umEmpty' }, t('panel.noUsageYet'))
@@ -1200,15 +1243,14 @@ window.__ModuleLoader__.load({
         h('span', null, '18:00'), h('span', null, '24:00')),
       moneyNote), portalHost) : null;
 
-      // 徽标分段：受设置控制。三段全关会得到一个空胶囊，所以花费段有兜底 ——
-      // 宁可无视"关掉花费"这一项，也不要显示一个什么都没有的胶囊。
-      const showCost = settings.pillCost || (!settings.pillBalance && !settings.pillPeriod);
+      // 三段全关或仅显示余额但余额不可用时，费用段兜底，保留可见入口。
+      const showCost = settings.pillCost || (!settings.pillPeriod && (!settings.pillBalance || balanceText === null));
       /** 各段：`[类型, 内容]`。图标与文字分开标注，才能只给文字段之间放点。 */
       const pillSegments = [];
       if (settings.pillPeriod) {
         pillSegments.push(['icon', h(PeriodIcon, { key: 'period', peak: rate.peak })]);
       }
-      if (showCost) pillSegments.push(['text', moneyText(totalMoney)]);
+      if (showCost) pillSegments.push(['text', totalText]);
       if (settings.pillBalance && balanceText !== null) {
         pillSegments.push(['text', t('pill.balance') + ' ' + balanceText]);
       }
@@ -1229,7 +1271,7 @@ window.__ModuleLoader__.load({
         }
         labelParts.push(content);
       });
-      const pillChildren = [pillIcon, labelParts.length === 0 ? null : h('span', { className: 'umLabel' }, labelParts)];
+      const pillChildren = [pillIcon, labelParts.length === 0 ? null : h('span', { key: 'label', className: 'umLabel' }, labelParts)];
 
       return h('div', { className: 'umRoot', ref: rootRef },
         h('span', { className: 'umAnchor' },
@@ -1239,9 +1281,10 @@ window.__ModuleLoader__.load({
             title: t('pill.hint'),
             'aria-haspopup': 'dialog',
             'aria-expanded': open,
-            'aria-label': moneyText(totalMoney) + ' · ' + stateText
+            'aria-label': totalText + ' · ' + stateText
               + (balanceText === null ? '' : ' · ' + t('pill.balance') + ' ' + balanceText),
-            onClick: () => setOpen(!open),
+            'aria-controls': open ? panelId : undefined,
+            onClick: () => setOpen((previous) => !previous),
           },
           pillChildren)),
         panel);
@@ -1255,6 +1298,8 @@ window.__ModuleLoader__.load({
         try {
           ctx.inject(['remote', 'remote.account'], (scope) => {
             ACCOUNT = scope.remote.account;
+            const captured = ACCOUNT;
+            scope.effect(() => () => { if (ACCOUNT === captured) { ACCOUNT = undefined; balanceCache = null; } });
           });
         } catch (error) {
           ACCOUNT = undefined;

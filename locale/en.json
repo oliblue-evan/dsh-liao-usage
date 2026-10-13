@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Usage & Balance",
-    "description": "Token usage, cost at each request's own time and model (peak/off-peak), and your account balance — one pill below the composer."
+    "description": "Session tokens, reference costs using DeepSeek rates at each request time and model tier, and account balance. Click for details, model breakdowns and balance refresh."
   }
 }

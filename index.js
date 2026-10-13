@@ -37,8 +37,6 @@ const inject = ['sessionProjections'];
 const BALANCE_URL = 'https://api.deepseek.com/user/balance';
 /** 余额缓存时长：余额不是实时量，60 秒足够，避免面板反复开关打接口。 */
 const CACHE_MS = 60000;
-/** 余额缓存（宿主进程内存，不落盘、不含密钥）。 */
-let cache = { at: 0, value: null };
 
 /** 密钥脱敏：绝不把 sk- 开头的串带进错误信息或响应。 */
 function redact(value) {
@@ -161,6 +159,9 @@ async function queryBalance(ctx) {
  * @param ctx - 插件上下文。
  */
 function apply(ctx) {
+  // 缓存与请求属于当前插件实例，重载后不会继承旧账号的数据。
+  const cache = { at: 0, value: null };
+  let pending = null;
   // 逐笔计价的投影（定价内核在 lib/pricing.js）。
   // 注册失败**不该带走整个插件**：客户端读不到这个投影时会自动退回"按当前价估算"
   // 并在面板里如实标注，比整个插件起不来好得多。
@@ -185,17 +186,18 @@ function apply(ctx) {
         return;
       }
       const now = Date.now();
-      if (cache.value !== null && now - cache.at < CACHE_MS) {
+      const refresh = req.headers['x-usage-pill-refresh'] === '1';
+      if (!refresh && cache.value !== null && now - cache.at < CACHE_MS) {
         res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
         res.end(JSON.stringify(Object.assign({ cached: true }, cache.value)));
         return;
       }
-      let out;
-      try {
-        out = await queryBalance(ctx);
-      } catch (error) {
-        out = { ok: false, error: redact(String(error && error.message ? error.message : error)) };
+      if (pending === null) {
+        pending = queryBalance(ctx)
+          .catch((error) => ({ ok: false, error: redact(String(error && error.message ? error.message : error)) }))
+          .finally(() => { pending = null; });
       }
+      const out = await pending;
       if (out.ok) {
         cache.at = now;
         cache.value = out;
