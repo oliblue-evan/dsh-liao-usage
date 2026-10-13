@@ -415,17 +415,28 @@ window.__ModuleLoader__.load({
       'pill.balance': '余',
       'pill.hint': '☀ 高峰 / 🌙 空闲 · 点击查看用量、费用与账户余额',
       'settings.title': '显示设置',
-      'settings.note': '改动立即生效。只影响显示，存在本地浏览器；计价口径与价目表按官方政策内置在插件里。',
+      'settings.note': '修改立即生效，只调整显示方式，偏好保存在当前浏览器。',
       'settings.pillPeriod': '徽标显示时段图标',
-      'settings.pillPeriodHint': '太阳＝高峰、月亮＝空闲；关掉则用通用图标',
+      'settings.pillPeriodHint': '太阳表示高峰、月亮表示空闲；关闭后不显示图标',
       'settings.pillCost': '徽标显示参考费用',
       'settings.pillCostHint': '按 DeepSeek 价表换算，渠道账单可能不同',
       'settings.pillBalance': '徽标显示账户余额',
       'settings.pillBalanceHint': '取不到余额时该段自动消失',
-      'settings.hideEmptyBuckets': '隐藏零值桶',
-      'settings.hideEmptyBucketsHint': '例如 DeepSeek 从不回报的「缓存写入」',
+      'settings.hideEmptyBuckets': '隐藏没有用量的项目',
+      'settings.hideEmptyBucketsHint': '明细中只保留有 token 用量的输入、输出和缓存项目',
       'settings.showSaved': '显示「缓存已省」',
       'settings.showSavedHint': '命中的 token 若按未命中价计要多花多少',
+      'settings.pillGroup': '底部胶囊',
+      'settings.detailGroup': '展开后的明细',
+      'settings.preview': '效果预览',
+      'settings.sample': '示例数据',
+      'settings.fallback': '所有内容关闭，或只开余额但余额不可用时，仍显示参考费用，保留详情入口。',
+      'settings.reset': '恢复默认',
+      'settings.resetDone': '已恢复默认显示设置。',
+      'settings.explain': '费用与余额怎么看',
+      'settings.explainCost': '≈ 表示参考费用：按 DeepSeek 价表和历史模型档位换算，第三方渠道的实际账单可能不同。',
+      'settings.explainBalance': '余额来自已登录账号，API Key 作为兜底。查询失败时标明上次结果，可在详情里重试。',
+      'settings.explainSaved': '「缓存已省」是缓存命中相对未命中的估算节省，不是余额增加。',
       'panel.title': '用量与余额',
       'panel.close': '关闭用量详情',
       'panel.session': '本会话',
@@ -469,17 +480,28 @@ window.__ModuleLoader__.load({
       'pill.balance': 'bal.',
       'pill.hint': '☀ peak / 🌙 off-peak · click for usage, cost and balance',
       'settings.title': 'Display settings',
-      'settings.note': 'Applies immediately. Display only, stored in this browser; pricing follows the official policy built into the plugin.',
+      'settings.note': 'Changes apply immediately to display only. Preferences stay in this browser.',
       'settings.pillPeriod': 'Period icon on the pill',
-      'settings.pillPeriodHint': 'Sun = peak, moon = off-peak; off falls back to the generic icon',
+      'settings.pillPeriodHint': 'Sun = peak, moon = off-peak; disabling hides the icon',
       'settings.pillCost': 'Cost on the pill',
       'settings.pillCostHint': 'Reference cost using DeepSeek rates; channel invoices may differ',
       'settings.pillBalance': 'Balance on the pill',
       'settings.pillBalanceHint': 'The segment hides itself when unavailable',
-      'settings.hideEmptyBuckets': 'Hide empty buckets',
-      'settings.hideEmptyBucketsHint': 'e.g. cache write, which DeepSeek never reports',
+      'settings.hideEmptyBuckets': 'Hide unused items',
+      'settings.hideEmptyBucketsHint': 'Only show input, output and cache items with token usage',
       'settings.showSaved': 'Show "saved by cache"',
       'settings.showSavedHint': 'What cache hits would have cost at the miss price',
+      'settings.pillGroup': 'Bottom pill',
+      'settings.detailGroup': 'Expanded details',
+      'settings.preview': 'Preview',
+      'settings.sample': 'Sample data',
+      'settings.fallback': 'If all segments are off, or only balance is on but unavailable, reference cost keeps the details entry visible.',
+      'settings.reset': 'Restore defaults',
+      'settings.resetDone': 'Default display settings restored.',
+      'settings.explain': 'Understanding cost and balance',
+      'settings.explainCost': '≈ marks reference cost using DeepSeek rates and historical model tiers. Third-party invoices may differ.',
+      'settings.explainBalance': 'Balance comes from the signed-in account, with API Key fallback. Failed refreshes mark the last result; retry in the details.',
+      'settings.explainSaved': 'Saved by cache estimates savings compared with cache misses; it does not increase your balance.',
       'panel.title': 'Usage & balance',
       'panel.close': 'Close usage details',
       'panel.session': 'This session',
@@ -577,8 +599,22 @@ window.__ModuleLoader__.load({
 .umAxis{display:flex;justify-content:space-between;color:var(--dsw-alias-label-tertiary);
   font-size:11px;line-height:16px;font-variant-numeric:tabular-nums}
 .umNote{color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:16px;margin-top:8px}
-.umSettings{display:grid;gap:0}
-.umSettingsHead{display:grid;gap:4px;padding-bottom:12px;border-bottom:1px solid var(--dsw-alias-border-l2)}
+.umSettings{display:grid;gap:16px}
+.umSettingsHead{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.umSettingsIntro{display:grid;gap:4px;flex:1;min-width:180px}
+.umSettingsCard{display:grid;gap:12px;padding:16px;border:1px solid var(--dsw-alias-border-l2,rgba(127,127,127,.18));border-radius:12px}
+.umSettingsCard .umSetting{padding:10px 0}
+.umSettingsCard .umSetting:last-child{padding-bottom:0;border-bottom:0}
+.umSettingsPreview{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:12px 14px;background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.07));border-radius:9px}
+.umPreviewPill{display:inline-flex;align-items:center;gap:6px;color:var(--dsw-alias-label-primary);font-size:13px;font-variant-numeric:tabular-nums;line-height:20px}
+.umPreviewPill svg{width:14px;height:14px;flex:none}
+.umSettingsButton{font:inherit;font-size:12px;color:var(--dsw-alias-label-secondary);border:1px solid var(--dsw-alias-border-l2);border-radius:7px;padding:6px 12px;min-height:32px;background:transparent;cursor:pointer}
+.umSettingsButton:disabled{opacity:.45;cursor:default}
+.umSettingsButton:focus-visible,.umSettings summary:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:3px}
+.umSettings summary{font-size:13px;font-weight:500;cursor:pointer}
+.umSettingsHelp{display:grid;gap:8px;padding-top:12px}
+.umDetailPreview{display:grid;gap:5px;padding:12px 14px;border-radius:9px;background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.07))}
+.umDetailPreviewRow{display:flex;justify-content:space-between;gap:16px;font-variant-numeric:tabular-nums}
 .umSettingsTitle{color:var(--dsw-alias-label-primary);font-size:14px;font-weight:600;line-height:20px}
 .umSettingsNote{color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:16px}
 .umSetting{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 0;border-bottom:1px solid var(--dsw-alias-border-l2)}
@@ -612,6 +648,16 @@ window.__ModuleLoader__.load({
     // 不要 require Harness 客户端包，所以按同一套数值自己实现：间距 8px、
     // 离视口边缘留白 12px、上方放不下翻到下方）
     // ========================================================================
+
+    function installStyles() {
+      let style = document.querySelector('style[data-dsh-style="usage-pill"]');
+      if (style === null) {
+        style = document.createElement('style');
+        style.setAttribute('data-dsh-style', 'usage-pill');
+        (document.head || document.documentElement).appendChild(style);
+    }
+    style.textContent = CSS;
+    }
 
     const PANEL_GAP = 8;
     const PANEL_MARGIN = 12;
@@ -917,7 +963,12 @@ window.__ModuleLoader__.load({
      * @param value - 新值。
      */
     function writeSetting(key, value) {
-      settingsSnapshot = normalizeSettings({ ...readSettings(), [key]: value });
+      writeSettings({ ...readSettings(), [key]: value });
+    }
+
+    /** 原子更新整份显示设置（恢复默认只广播一次）。 */
+    function writeSettings(value) {
+      settingsSnapshot = normalizeSettings(value);
       try {
         window.localStorage.setItem(SETTINGS_KEY, JSON.stringify(settingsSnapshot));
       } catch {
@@ -998,31 +1049,50 @@ window.__ModuleLoader__.load({
     function UsageMeterSettings(props) {
       const t = translator(props);
       const settings = useSettings();
-      // 该槽位只在 `view: 'page'` 时渲染（槽位文档明确如此）
+      useLayoutEffect(() => { if (props.view === 'page') installStyles(); }, [props.view]);
+      const [restored, setRestored] = useState(false);
       if (props.view !== 'page') return null;
-      const rows = [
-        ['pillPeriod', 'settings.pillPeriod', 'settings.pillPeriodHint'],
-        ['pillCost', 'settings.pillCost', 'settings.pillCostHint'],
-        ['pillBalance', 'settings.pillBalance', 'settings.pillBalanceHint'],
-        ['hideEmptyBuckets', 'settings.hideEmptyBuckets', 'settings.hideEmptyBucketsHint'],
-        ['showSaved', 'settings.showSaved', 'settings.showSavedHint'],
-      ];
+      const isDefault = Object.keys(SETTINGS_DEFAULTS).every((key) => settings[key] === SETTINGS_DEFAULTS[key]);
+      const renderRow = (key) => h('div', { key, className: 'umSetting' },
+        h('span', { className: 'umSettingText' },
+          h('span', { className: 'umSettingLabel' }, t('settings.' + key)),
+          h('span', { className: 'umSettingHint' }, t('settings.' + key + 'Hint'))),
+        h(Switch, { checked: settings[key], label: t('settings.' + key),
+          onChange: (next) => { setRestored(false); writeSetting(key, next); } }));
+      // 示例只展示格式，不查询账号或改动会话数据；与真实胶囊使用相同的兜底规则。
+      const previewCost = settings.pillCost || (!settings.pillPeriod && !settings.pillBalance);
+      const detailRow = (key, value) => h('div', { key, className: 'umDetailPreviewRow' },
+        h('span', null, t(key)), h('span', null, value));
       return h('div', { className: 'umSettings' },
-        // 标题与简介由宿主的包元数据提供（package.json + locale/*.json，见 README），
-        // 本卡**不再重复渲染一份** —— 曾经为了在 meta 不可用时也有介绍而临时加过，
-        // 元数据正常后就变成了同一段话连着出现两次。
         h('div', { className: 'umSettingsHead' },
-          h('div', { className: 'umSettingsTitle' }, t('settings.title')),
-          h('div', { className: 'umSettingsNote' }, t('settings.note'))),
-        ...rows.map(([key, labelKey, hintKey]) => h('div', { key: key, className: 'umSetting' },
-          h('span', { className: 'umSettingText' },
-            h('span', { className: 'umSettingLabel' }, t(labelKey)),
-            h('span', { className: 'umSettingHint' }, t(hintKey))),
-          h(Switch, {
-            checked: settings[key],
-            label: t(labelKey),
-            onChange: (next) => writeSetting(key, next),
-          }))));
+          h('div', { className: 'umSettingsIntro' },
+            h('div', { className: 'umSettingsTitle' }, t('settings.title')),
+            h('div', { className: 'umSettingsNote' }, t('settings.note'))),
+          h('button', { className: 'umSettingsButton', type: 'button', disabled: isDefault,
+            onClick: () => { writeSettings(SETTINGS_DEFAULTS); setRestored(true); } }, t('settings.reset'))),
+        restored ? h('div', { className: 'umSettingsNote', role: 'status' }, t('settings.resetDone')) : null,
+        h('section', { className: 'umSettingsCard', 'aria-label': t('settings.pillGroup') },
+          h('div', { className: 'umSettingsTitle' }, t('settings.pillGroup')),
+          h('div', { className: 'umSettingsPreview', 'aria-label': t('settings.preview') },
+            h('div', { className: 'umSettingsNote' }, t('settings.preview') + ' · ' + t('settings.sample')),
+            h('div', { className: 'umPreviewPill' },
+              settings.pillPeriod ? h(PeriodIcon, { peak: false }) : null,
+              h('span', null, previewCost ? '≈¥0.12' : '',
+                previewCost && settings.pillBalance ? h('span', { className: 'umSep', 'aria-hidden': true }, '·') : null,
+                settings.pillBalance ? t('pill.balance') + ' ¥37.00' : ''))),
+          ...['pillPeriod', 'pillCost', 'pillBalance'].map(renderRow),
+          h('div', { className: 'umSettingsNote' }, t('settings.fallback'))),
+        h('section', { className: 'umSettingsCard', 'aria-label': t('settings.detailGroup') },
+          h('div', { className: 'umSettingsTitle' }, t('settings.detailGroup')),
+          h('div', { className: 'umDetailPreview umSettingsNote', 'aria-label': t('settings.preview') + ' · ' + t('settings.detailGroup') },
+            h('div', null, t('settings.sample')),
+            detailRow('panel.miss', '1,200 tok'), detailRow('panel.out', '600 tok'),
+            !settings.hideEmptyBuckets ? detailRow('panel.write', '0 tok') : null,
+            settings.showSaved ? detailRow('panel.saved', '≈¥0.04') : null),
+          ...['hideEmptyBuckets', 'showSaved'].map(renderRow)),
+        h('details', { className: 'umSettingsCard' }, h('summary', null, t('settings.explain')),
+          h('div', { className: 'umSettingsHelp umSettingsNote' },
+            ...['settings.explainCost', 'settings.explainBalance', 'settings.explainSaved'].map((key) => h('div', { key }, t(key))))));
     }
 
     /**
@@ -1031,6 +1101,7 @@ window.__ModuleLoader__.load({
      * @returns 徽标（展开时一并渲染面板）。
      */
     function UsageMeter(props) {
+      useLayoutEffect(installStyles, []);
       const t = translator(props);
       /** 展示偏好（插件页里可改，见 UsageMeterSettings）。 */
       const settings = useSettings();
@@ -1318,15 +1389,7 @@ window.__ModuleLoader__.load({
         // 卸载后残留的那几 KB 样式匹配不到任何元素（下次刷新自然消失），
         // 而这个失败模式的代价比留一份样式表难看得多。官方客户端插件也是先 querySelector
         // 找同键样式再注入。
-        ctx.effect(() => {
-          let style = document.querySelector('style[data-dsh-style="usage-pill"]');
-          if (style === null) {
-            style = document.createElement('style');
-            style.setAttribute('data-dsh-style', 'usage-pill');
-            (document.head || document.documentElement).appendChild(style);
-          }
-          style.textContent = CSS;
-        }, 'usage-pill: styles');
+        ctx.effect(installStyles, 'usage-pill: styles');
         // 设置卡：bundle 自己的配置槽，key 用包名（官方给 bundle 配置指定的位置，
         // 渲染在本 bundle 插件页的描述与组件列表之间）。
         // 【踩过的坑】`slots.inject` 返回的是 dispose 函数，**必须**用 `ctx.effect` 包住

@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Usage & Balance",
-    "description": "Session tokens, reference costs using DeepSeek rates at each request time and model tier, and account balance. Click for details, model breakdowns and balance refresh."
+    "description": "View session tokens, reference costs using DeepSeek rates and account balance; explore model details and customize the bottom pill."
   }
 }

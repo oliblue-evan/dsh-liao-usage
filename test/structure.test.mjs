@@ -57,9 +57,10 @@ test('样式是插件级幂等注入：按键复用同一个 <style>，且不塞
   // 页面就变成「组件还在、样式没了」。所以改成按键复用、不随 dispose 移除。
   assert.match(
     source,
-    /ctx\.effect\(\(\) => \{\s*let style = document\.querySelector\('style\[data-dsh-style=/,
+    /function installStyles\(\) \{\s*let style = document\.querySelector\('style\[data-dsh-style=/,
     '缺少插件级幂等样式注入（按键 querySelector 复用，官方也是这个写法）',
   );
+  assert.match(source, /ctx\.effect\(installStyles, 'usage-pill: styles'\)/);
   assert.match(source, /style\.textContent = CSS/, '每次 apply 都应刷新样式内容，否则更新版本会用到旧样式');
   assert.ok(
     !/style\.remove\(\)/.test(source),

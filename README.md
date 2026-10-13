@@ -4,7 +4,7 @@
 > **account balance** in one pill below the composer. It needs **no API key** when you are
 > signed in to a DeepSeek account (it reads the account balance through the harness's own
 > account remote, falling back to `DEEPSEEK_API_KEY`). It is a single-file client bundle
-> with a dependency-free host half, and ships 69 assertions (`npm test`). MIT licensed.
+> with a dependency-free host half, and ships 71 assertions (`npm test`). MIT licensed.
 > Install: `plugin_manager(action: "install_bundle", target: "github:oliblue-evan/dsh-usage-pill")`, then
 > reload the page.
 
@@ -20,6 +20,15 @@ DeepSeek **用量与余额**：输入框下方一枚徽标，实时显示本会�
 ## 金额说明
 
 **费用是参考估算，余额是接口返回值。** 本插件按 DeepSeek 价表、每笔事件时间和模型档位换算；第三方渠道及自定义模型也沿用这套规则，无法代表对应渠道的真实账单。下文的「逐笔实际发生额」指按事件时刻累计的参考结果，而不是渠道已结算金额。
+
+## 1.2.0：设置与显示体验
+
+- 设置分成「底部胶囊」与「展开后的明细」，用卡片明确各开关作用范围。
+- 两组设置都有即时示例，示例数据明确标注，不查询账号或改动会话。
+- 一键恢复默认显示设置，不触碰用量、历史计价或账号授权。
+- 折叠帮助解释参考费用、真实余额与缓存节省；修正关闭时段图标的说明。
+- 设置或胶囊独立重挂载时修复缺失样式，热更新后也保持正常显示。
+- 71 项测试通过，并在本机 DSH 验证设置和真实用量弹层。
 
 ## 1.1.0：弹层与余额查询修复
 
@@ -225,7 +234,7 @@ const cacheWriteTokens = rawUsage.prompt_tokens_details?.cache_write_tokens || 0
 | `client.js` | 全部界面：读投影、余额双链路、徽标与弹层 |
 | `locale/en.json`、`locale/zh-CN.json` | 插件页的标题与介绍（`dsh-app-boot` 的 `readPluginMeta` 读这个目录） |
 | `assets/icon.svg` | 插件图标（`package.json` 的 `icon`，相对路径、≤256 KiB） |
-| `test/*.test.mjs` | 58 项断言（`npm test`） |
+| `test/*.test.mjs` | 71 项断言（`npm test`） |
 
 **无构建步骤，`client.js` 就是产物本身。** 这也不是偷懒 —— 宿主把各插件的 bundle
 拼接成一个 combo 脚本、以**传统脚本**执行（`window.__ModuleLoader__` 处于 queue 模式，
@@ -286,13 +295,13 @@ const cacheWriteTokens = rawUsage.prompt_tokens_details?.cache_write_tokens || 0
 
 | 开关 | 默认 | 效果 |
 |---|---|---|
-| 徽标显示时段图标 | 开 | 关掉则用通用图标代替太阳/月亮 |
-| 徽标显示当前花费 | 开 | — |
+| 徽标显示时段图标 | 开 | 关闭后不显示太阳/月亮图标 |
+| 徽标显示参考费用 | 开 | — |
 | 徽标显示账户余额 | 开 | 取不到余额时该段本就自动消失 |
-| 隐藏零值桶 | 开 | 如 DeepSeek 从不回报的「缓存写入」 |
+| 隐藏没有用量的项目 | 开 | 明细中省略 token 用量为零的项目 |
 | 显示「缓存已省」 | 开 | — |
 
-三段全关会得到一个空胶囊，所以花费段有兜底：宁可无视"关掉花费"，也不显示空胶囊。
+设置分组提供即时示例（非真实余额），「恢复默认」只重置五个显示开关。三段全关，或只开余额但查询不可用时，参考费用段兜底，保持详情入口可见。
 
 **为什么设置存在浏览器本地（localStorage）而不是宿主**：这些都是展示偏好，不是宿主状态，
 没必要走宿主；也因此宿主半边缺席时设置照常可用。值会**逐项按默认值兜底**、未知键丢弃
@@ -392,7 +401,7 @@ curl -s "http://127.0.0.1:19387/plugins/<id>/client.js&rev=<rev>"
 
 ## 验证
 
-`npm test`（= `node --test test/*.test.mjs`）跑 **69 项断言**，覆盖纯逻辑、宿主路由与真实 React 弹层行为：
+`npm test`（= `node --test test/*.test.mjs`）跑 **71 项断言**，覆盖纯逻辑、宿主路由与真实 React 弹层行为：
 
 | 文件 | 断言 | 覆盖 |
 |---|---|---|

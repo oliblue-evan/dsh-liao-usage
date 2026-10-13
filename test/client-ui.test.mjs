@@ -36,7 +36,7 @@ function fixture(account) {
     observe() {}
     disconnect() { this.disconnected = true; }
   }
-  vm.runInNewContext(source.replace("      inject: ['slots', 'locale'],", "      __test: { UsageMeter, requestBalance },\n      inject: ['slots', 'locale'],"), {
+  vm.runInNewContext(source.replace("      inject: ['slots', 'locale'],", "      __test: { UsageMeter, UsageMeterSettings, requestBalance },\n      inject: ['slots', 'locale'],"), {
     window: Object.assign(window, { __ModuleLoader__: { load: (entry) => { factory = entry.factory; } } }),
     document: window.document, ResizeObserver, AbortController, console,
     fetch: (...args) => fetcher(...args),
@@ -60,6 +60,12 @@ function fixture(account) {
   const click = async (node) => act(async () => node.dispatchEvent(new window.MouseEvent('click', { bubbles: true })));
   return {
     window, plugin, scope, button, panel, click, frames, observers,
+    async renderSettings(view = 'page', withMeter = true) {
+      await act(async () => root.render(React.createElement(React.Fragment, null,
+        React.createElement(plugin.__test.UsageMeterSettings, { view }),
+        withMeter && React.createElement(plugin.__test.UsageMeter, { sessionId: 'settings-test',
+          useProjection: (name) => name === 'tokenUsage' ? { uncachedInputTokens: 20, outputTokens: 30 } : undefined }))));
+    },
     fetchWith: (fn) => { fetcher = fn; },
     async render(overrides = {}) {
       await act(async () => root.render(React.createElement(plugin.__test.UsageMeter, {
@@ -240,5 +246,57 @@ test('历史计价标为参考费用，余额仍显示接口返回值', async ()
     await f.click(f.button());
     assert.match(f.panel().textContent, /本会话参考费用/);
     assert.match(f.panel().textContent, /渠道账单可能不同/);
+  } finally { await f.cleanup(); }
+});
+
+test('设置开关同步真实胶囊与示例，恢复默认只改变显示偏好', async () => {
+  const f = fixture();
+  try {
+    let calls = 0;
+    f.fetchWith(async () => { calls++; throw new Error('preview must not fetch'); });
+    f.window.document.querySelector('style[data-dsh-style="usage-pill"]').remove();
+    await f.renderSettings('page', false);
+    assert.ok(f.window.document.querySelector('style[data-dsh-style="usage-pill"]').textContent.includes('.umSettingsCard'), '独立重挂载设置槽也能恢复样式');
+    assert.equal(calls, 0, '设置示例自身不查询账号');
+    await f.renderSettings();
+    const before = calls;
+    const settings = () => f.window.document.querySelector('.umSettings');
+    const switchFor = (name) => [...settings().querySelectorAll('[role="switch"]')].find((node) => node.getAttribute('aria-label') === name);
+    const reset = () => settings().querySelector('.umSettingsButton');
+    assert.equal(reset().disabled, true);
+    assert.ok(settings().querySelector('.umPreviewPill svg'));
+    await f.click(switchFor('徽标显示时段图标'));
+    assert.equal(settings().querySelector('.umPreviewPill svg'), null);
+    assert.equal(f.button().querySelector('svg'), null);
+    await f.click(switchFor('徽标显示参考费用'));
+    await f.click(switchFor('徽标显示账户余额'));
+    assert.ok(settings().querySelector('.umPreviewPill').textContent.includes('≈¥'));
+    assert.ok(f.button().textContent.includes('≈¥'), '全部关闭仍有真实详情入口');
+    await f.click(switchFor('隐藏没有用量的项目'));
+    assert.ok(settings().querySelector('.umDetailPreview').textContent.includes('缓存写入'));
+    await f.click(switchFor('显示「缓存已省」'));
+    assert.ok(!settings().querySelector('.umDetailPreview').textContent.includes('缓存已省'));
+    assert.equal(calls, before, '修改设置不额外查询账号');
+    await f.click(reset());
+    assert.ok([...settings().querySelectorAll('[role="switch"]')].every((node) => node.getAttribute('aria-checked') === 'true'));
+    assert.ok(settings().querySelector('[role="status"]').textContent.includes('已恢复'));
+    assert.equal(reset().disabled, true);
+    const persisted = JSON.parse(f.window.localStorage.getItem('usage-pill.settings.v1'));
+    assert.deepEqual(Object.keys(persisted).sort(), ['pillPeriod', 'pillCost', 'pillBalance', 'hideEmptyBuckets', 'showSaved'].sort());
+    assert.ok(Object.values(persisted).every((value) => value === true));
+    assert.ok(f.button().querySelector('svg'));
+  } finally { await f.cleanup(); }
+});
+
+test('设置仅显示在详情页，重新挂载保留显示偏好', async () => {
+  const f = fixture();
+  try {
+    await f.renderSettings();
+    await f.click(f.window.document.querySelector('[aria-label="徽标显示时段图标"]'));
+    await f.render();
+    await f.renderSettings();
+    assert.equal(f.window.document.querySelector('[aria-label="徽标显示时段图标"]').getAttribute('aria-checked'), 'false');
+    await f.renderSettings('row');
+    assert.equal(f.window.document.querySelector('.umSettings'), null);
   } finally { await f.cleanup(); }
 });
