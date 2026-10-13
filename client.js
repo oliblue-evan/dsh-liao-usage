@@ -334,6 +334,30 @@ window.__ModuleLoader__.load({
     }
 
     /**
+     * 分模型金额 → 展示行 `[[模型, 金额], …]`，按金额从大到小。
+     *
+     * 【只有一个模型时返回空数组】那一块与上面的合计完全重复，只会让面板变长。
+     * 金额为 0 的模型也丢掉（通常是刚被替换回退掉的）。
+     *
+     * @param view - 宿主投影视图（可能为 null / 缺字段）。
+     * @returns 展示行；不适用时为空数组。
+     */
+    function modelRowsOf(view) {
+      if (view === null || typeof view !== 'object') return [];
+      const byModel = view.byModel;
+      if (byModel === null || typeof byModel !== 'object' || Array.isArray(byModel)) return [];
+      const rows = [];
+      for (const name of Object.keys(byModel)) {
+        const money = byModel[name];
+        const total = money !== null && typeof money === 'object' ? Number(money.totalCny) || 0 : 0;
+        if (total > 0) rows.push([name, total]);
+      }
+      if (rows.length <= 1) return [];
+      rows.sort((left, right) => right[1] - left[1]);
+      return rows;
+    }
+
+    /**
      * 胶囊各段之间该不该放分隔点。
      *
      * **只有文字段之间才放**：图标不是一段文字，`🌙 · ¥8.18` 里那个点是多余的。
@@ -425,6 +449,8 @@ window.__ModuleLoader__.load({
       'panel.estimated': '金额：按当前价估算（宿主投影不可用）',
       'panel.noUsage': '用量投影不可用，暂时算不出金额',
       'panel.tierUnknown': '未识别到模型 · 按 {tier} 档计',
+      'panel.byModel': '按模型',
+      'panel.unitMulti': '单价是当前模型（{model}）的价；上面的金额是全部模型累计的',
       'panel.beijing': '北京时间',
       'panel.timeline': '今日时段轴（北京时间）',
             'panel.peakTimes': '高峰单价 ×{mult}',
@@ -471,6 +497,8 @@ window.__ModuleLoader__.load({
       'panel.estimated': 'Cost estimated at current rates (host projection unavailable)',
       'panel.noUsage': 'Usage projection unavailable; cost cannot be computed',
       'panel.tierUnknown': 'model unknown \u00b7 priced as {tier}',
+      'panel.byModel': 'By model',
+      'panel.unitMulti': 'Unit price is for the current model ({model}); the amounts above total every model',
       'panel.beijing': 'Beijing time',
       'panel.timeline': 'Today in Beijing time',
             'panel.peakTimes': 'peak ×{mult}',
@@ -495,6 +523,8 @@ window.__ModuleLoader__.load({
 .umPill:hover,.umPill[aria-expanded="true"]{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-secondary)}
 .umPill:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:2px}
 .umLabel{text-overflow:ellipsis;min-width:0;overflow:hidden}
+.umModelName{font-family:var(--dsw-font-mono,ui-monospace,SFMono-Regular,Menlo,monospace);font-size:11px;
+  color:var(--dsw-alias-label-secondary);text-overflow:ellipsis;white-space:nowrap;min-width:0;overflow:hidden}
 /* 分隔点的间距**只有**这 6px：官方把它放在 inline 的 label 里，pill 的 gap 不作用于它。
    若把点做成 pill 的平级 flex 子元素，gap:6px 会叠加成 12px。数值与官方原件一致。 */
 .umSep{color:var(--dsw-alias-separator-primary);margin:0 6px}
@@ -578,6 +608,23 @@ window.__ModuleLoader__.load({
      * @param panelRef - 面板（position:fixed）。
      * @returns 定位样式；未量到尺寸时返回 null。
      */
+    /**
+     * 分模型的 dt/dd 节点。
+     *
+     * 提成函数是为了让面板那处**不套三层括号** —— 内联写时括号数极易数错。
+     *
+     * 【为什么在组件区而不是纯逻辑区】它调用 `h()` / `React.Fragment`；放进纯逻辑区
+     * 会破坏"那段可被 node 直接求值"的前提（结构测试会抓 —— 实际就抓到了）。
+     *
+     * @param rows - `modelRowsOf` 的结果。
+     * @returns 一组 dt/dd 片段。
+     */
+    function modelRowNodes(rows) {
+      return rows.map((row) => h(React.Fragment, { key: row[0] },
+        h('dt', null, h('span', { className: 'umModelName', title: row[0] }, row[0])),
+        h('dd', null, fmtMoney(row[1]))));
+    }
+
     function useAnchoredPosition(open, anchorRef, panelRef) {
       const [pos, setPos] = useState(null);
       const last = useRef('');
@@ -1022,6 +1069,8 @@ window.__ModuleLoader__.load({
           ? { hit: estimate.hit, miss: estimate.miss, write: estimate.write, out: estimate.out, total: estimate.total }
           : null);
       const totalMoney = money === null ? null : money.total;
+      /** 分模型行：只在宿主逐笔计价可用且真的换过模型时非空。 */
+      const modelRows = pricedView === null ? [] : modelRowsOf(pricedView);
       const tokens = hasUsage ? totalTokens(usage) : null;
       /** 金额文案：拿不到用量时显示破折号，而不是 ¥0（那会被读成"免费"）。 */
       const moneyText = (value) => (value === null || value === undefined ? '—' : fmtMoney(value));
@@ -1073,6 +1122,17 @@ window.__ModuleLoader__.load({
         ? t('panel.tierUnknown', { tier: tier })
         : String(model);
 
+      /** 单价列的口径提示：换过模型时，单价是**当前模型**的、金额是**全部模型**累计的。 */
+      const unitNote = modelRows.length > 1 ? t('panel.unitMulti', { model: modelText }) : undefined;
+      /**
+       * 分模型区块。合计是跨模型累加的，换过模型之后这一块才说清"各花了多少"；
+       * 只有一个模型时 `modelRowsOf` 返回空，整块不渲染。
+       */
+      const modelSection = modelRows.length === 0 ? null : h(React.Fragment, null,
+        h('div', { className: 'umTitleRule', 'aria-hidden': true }),
+        h('div', { className: 'umSect' }, t('panel.byModel')),
+        h('dl', { className: 'umDetails' }, modelRowNodes(modelRows)));
+
       const portalHost = typeof document === 'undefined' ? null : (document.body || document.documentElement);
       const panel = open && portalHost !== null ? createPortal(h('div', {
         ref: panelRef,
@@ -1118,7 +1178,8 @@ window.__ModuleLoader__.load({
           h('dt', null, t('panel.' + key)),
           h('dd', null, h('span', { className: 'umCostLine' },
             h('span', { title: tokenTitle(bucketTokens) }, moneyText(spent)),
-            h('span', { className: 'umUnit' }, ' @' + fmtMoney(unitPrice))))))),
+            h('span', { className: 'umUnit', title: unitNote }, ' @' + fmtMoney(unitPrice))))))),
+      modelSection,
       h('div', { className: 'umTitleRule', 'aria-hidden': true }),
       // 时段：一行说清"现在什么价、还能用多久"。倒计时部分自带 1 秒刷新。
       h(Countdown, {

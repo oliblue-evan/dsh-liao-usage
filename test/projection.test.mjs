@@ -18,6 +18,11 @@ const bj = (y, m, d, hh, mm) => Date.UTC(y, m - 1, d, hh - 8, mm);
 test('注册契约：字段齐备、stateVersion 合法、key 带自己的命名空间', () => {
   assert.equal(def.key, 'usagePillCost', '键名必须带命名空间，避免与别的插件共享同一个 unit');
   assert.ok(Number.isSafeInteger(def.stateVersion) && def.stateVersion >= 0, '框架会校验这一条');
+  // v2 = 状态与视图新增 byModel。**形状变了必须升版本**：框架对 `ver` 与 stateVersion
+  // 不符的 checkpoint 是"读时丢弃、从事件重建"（dsh-session-projection-cache）。
+  // 不升版本的话，旧缓存缺 byModel 会在 stateSchema.parse 上抛错 → 整个单元静默失效，
+  // 面板退化成"按当前价估算"，而且没人知道为什么。
+  assert.equal(def.stateVersion, 2, '改状态形状时必须升 stateVersion');
   assert.equal(typeof def.init, 'function');
   assert.equal(typeof def.apply, 'function');
   assert.equal(typeof def.stateSchema.parse, 'function');
@@ -55,12 +60,30 @@ test('视图能过 viewSchema，且数字与折叠结果一致', () => {
   assert.equal(view.totalCny, 10.04, '高峰 flash：命中 .04 + 未命中 2 + 输出 8');
   assert.equal(view.pricedRequests, 1);
   assert.deepEqual(Object.keys(view).sort(), [
-    'cacheReadCny', 'currency', 'missCny', 'offPeakCny', 'outputCny',
+    'byModel', 'cacheReadCny', 'currency', 'missCny', 'offPeakCny', 'outputCny',
     'peakCny', 'pricedRequests', 'totalCny', 'unpricedRequests', 'writeCny',
   ].sort(), 'view 的字段应与客户端读取的一致');
+  assert.deepEqual(Object.keys(view.byModel), ['deepseek-v4-flash'], '按模型 id 分组');
+  assert.deepEqual(Object.keys(view.byModel['deepseek-v4-flash']).sort(), [
+    'cacheReadCny', 'missCny', 'outputCny', 'totalCny', 'writeCny',
+  ].sort(), '每个模型的分桶与顶层同名，界面可直接复用渲染');
 });
 
 test('未识别的键不会误判：apply 遇到无关事件返回原状态引用', () => {
   const state = def.init();
   assert.equal(def.apply(state, { type: 'tool/result', time: Date.now(), data: {} }), state, '无关事件不该产生新对象');
+});
+
+test('缺 byModel 的旧版本 checkpoint 会被 parse 拒绝（从而触发重建）', () => {
+  // 钉住"为什么必须升 stateVersion"：不升就会拿旧形状去 parse 新 schema，
+  // 结果是投影单元静默不可用，面板悄悄退化成估算。
+  const legacy = {
+    route: { provider: 'deepseek', model: 'deepseek-v4-flash' },
+    totals: {
+      cacheReadCny: 0, missCny: 0, writeCny: 0, outputCny: 0, peakCny: 0, offPeakCny: 0,
+      pricedRequests: 0, unpricedRequests: 0,
+    },
+    last: null,
+  };
+  assert.throws(() => def.stateSchema.parse(legacy), /byModel/, '缺 byModel 的旧状态应被拒绝');
 });

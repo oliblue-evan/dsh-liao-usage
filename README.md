@@ -5,7 +5,7 @@
 > **account balance** in one pill below the composer. It needs **no API key** when you are
 > signed in to a DeepSeek account (it reads the account balance through the harness's own
 > account remote, falling back to `DEEPSEEK_API_KEY`). It is a single-file client bundle
-> with a dependency-free host half, and ships 50 assertions (`npm test`). MIT licensed.
+> with a dependency-free host half, and ships 58 assertions (`npm test`). MIT licensed.
 > Install: `plugin_manager(action: "install_bundle", target: "github:oliblue-evan/dsh-usage-pill")`, then
 > reload the page.
 
@@ -117,6 +117,32 @@ ctx.remote.account.getBalance({
 - **价格政策时间线**：按用量发生的时刻取段，历史回看不被新规追溯改写。
 - 「缓存已省」= 命中的 token 若按未命中价计要多花的钱（按当前价算，面板里注明）。
 
+### 换过模型之后：按模型分开显示
+
+`totals` 是**跨模型累加**的。会话中途换过模型之后，"本会话花费 ¥9.37"里混着几档价，
+而单价列显示的却是**当前**模型的价 —— 两者一相除得到的 token 数是错的，也没法跨模型比价。
+
+所以投影额外维护一份 `byModel`（键 = 模型 id），面板在换过模型时多出一块：
+
+```
+按模型
+  deepseek-v4-pro     ¥36.30
+  qfmodel             ¥18.15
+  deepseek-v4-flash   ¥10.04
+```
+
+三条规则：
+
+- **只有一个模型时整块不显示** —— 与上面的合计完全重复，只会让面板变长；
+- **按金额降序**（贵在前），0 金额的模型丢掉；
+- 单价列此时在 tooltip 里注明「单价是当前模型的价；上面的金额是全部模型累计的」。
+
+回退口径要注意：同一 turn+step 的替换要按**当初那个模型**回退，不能按"当前模型" ——
+重试时换了模型的话，按当前模型扣会把别的桶扣成负数。所以样本自身记了归属模型
+（`sample.model`），这条有专门的测试。
+
+> 面板顶部的合计**始终是全部模型之和**，分模型块只是把它拆开看；两者恒等，有测试钉住。
+
 ### 为什么「缓存写入」对 DeepSeek 永远是 0
 
 **因为 DeepSeek 没有这个概念。** 它的上下文缓存是**服务端自动**完成的：把前缀写进缓存
@@ -185,7 +211,7 @@ const cacheWriteTokens = rawUsage.prompt_tokens_details?.cache_write_tokens || 0
 | `client.js` | 全部界面：读投影、余额双链路、徽标与弹层 |
 | `locale/en.json`、`locale/zh-CN.json` | 插件页的标题与介绍（`dsh-app-boot` 的 `readPluginMeta` 读这个目录） |
 | `assets/icon.svg` | 插件图标（`package.json` 的 `icon`，相对路径、≤256 KiB） |
-| `test/*.test.mjs` | 50 项断言（`npm test`） |
+| `test/*.test.mjs` | 58 项断言（`npm test`） |
 
 **无构建步骤，`client.js` 就是产物本身。** 这也不是偷懒 —— 宿主把各插件的 bundle
 拼接成一个 combo 脚本、以**传统脚本**执行（`window.__ModuleLoader__` 处于 queue 模式，
@@ -352,7 +378,7 @@ curl -s "http://127.0.0.1:19387/plugins/<id>/client.js&rev=<rev>"
 
 ## 验证
 
-`npm test`（= `node --test test/*.test.mjs`）跑 **50 项断言**，9 个文件各管一层：
+`npm test`（= `node --test test/*.test.mjs`）跑 **58 项断言**，9 个文件各管一层：
 
 | 文件 | 断言 | 覆盖 |
 |---|---|---|

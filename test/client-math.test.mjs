@@ -13,7 +13,7 @@ const c = clientScope([
   'isPeakAt', 'beijingClock', 'nextSwitchAt', 'tierOfModel', 'scheduleAt', 'costOf',
   'totalTokens', 'fmtCountdown', 'fmtBeijing', 'fmtExactTokens', 'fmtMoney', 'symbolOf',
   'fromAccountBalance', 'fromKeyBalance', 'visibleRows', 'normalizeSettings', 'SETTINGS_DEFAULTS',
-  'separatorBefore',
+  'separatorBefore', 'modelRowsOf',
 ]);
 
 /** 北京时间某时刻对应的 UTC 毫秒。 */
@@ -153,6 +153,30 @@ test('设置归一化：逐项按默认兜底，未知键丢弃', () => {
     Object.keys(defaults).sort(),
     '未知键要丢弃，不能带进设置对象',
   );
+});
+
+test('分模型展示行：只有一个模型就不显示，多个则按金额降序', () => {
+  const view = (byModel) => ({ byModel });
+  assert.deepEqual(c.modelRowsOf(view({ a: { totalCny: 1 } })), [], '单模型与合计重复，不显示');
+  assert.deepEqual(c.modelRowsOf(view({})), [], '空对象不显示');
+  assert.deepEqual(
+    c.modelRowsOf(view({ flash: { totalCny: 10.04 }, pro: { totalCny: 36.3 } })),
+    [['pro', 36.3], ['flash', 10.04]], '按金额从大到小');
+  // 注意两条规则会叠加：丢掉非正数之后若只剩一个模型，仍然不显示（与合计重复）。
+  assert.deepEqual(
+    c.modelRowsOf(view({ a: { totalCny: 5 }, zero: { totalCny: 0 } })),
+    [], '丢掉 0 金额后只剩一个模型 → 仍不显示');
+  assert.deepEqual(
+    c.modelRowsOf(view({ a: { totalCny: 5 }, b: { totalCny: 3 }, zero: { totalCny: 0 } })),
+    [['a', 5], ['b', 3]], '0 金额（通常是刚被回退的）被丢掉，剩下的按金额降序');
+  assert.deepEqual(c.modelRowsOf(null), []);
+  assert.deepEqual(c.modelRowsOf(undefined), []);
+  assert.deepEqual(c.modelRowsOf({}), [], '缺 byModel 字段');
+  assert.deepEqual(c.modelRowsOf(view(null)), [], 'byModel 为 null');
+  assert.deepEqual(c.modelRowsOf(view('x')), [], 'byModel 是字符串');
+  assert.deepEqual(c.modelRowsOf(view([])), [], 'byModel 是数组');
+  assert.deepEqual(c.modelRowsOf(view({ bad: null, ok: { totalCny: 2 }, x: {} })), [],
+    '脏项丢掉后只剩一个模型 → 仍不显示');
 });
 
 test('胶囊分隔点：只在文字段之间放（图标后面不放）', () => {
