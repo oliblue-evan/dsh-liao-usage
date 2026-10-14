@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "用量与余额",
-    "description": "查看会话用量、DeepSeek 价表参考费用与账户余额；按模型展开明细，自定义底部胶囊。"
+    "description": "DeepSeek 显示会话费用与账户余额；Grok 显示本周剩余额度。密码只留在本机宿主进程。"
   }
 }

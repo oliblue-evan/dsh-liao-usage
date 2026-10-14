@@ -58,6 +58,8 @@ window.__ModuleLoader__.load({
     const CELL = 'usage-pill';
     /** 余额接口。 */
     const BALANCE_API = '/api/usage-pill/balance';
+    /** Grok 周额度接口。密码留在宿主，这里只拿百分比。 */
+    const GROK_API = '/api/usage-pill/grok-quota';
     /** 余额视为"新鲜"的时长；超过就在面板打开时重取（宿主侧另有 60 秒缓存）。 */
     const BALANCE_FRESH_MS = 60000;
 
@@ -163,6 +165,34 @@ window.__ModuleLoader__.load({
     /** 模型名 → 价目档位：含 flash 走 flash 档，其余（pro / 未知）走 pro 档。 */
     function tierOfModel(model) {
       return String(model || '').toLowerCase().includes('flash') ? 'flash' : 'pro';
+    }
+
+    /**
+     * 当前选择走哪一种额度展示。
+     * 只有 provider 或模型名明确是 grok 才切过去；DeepSeek 与认不出的选择保持原样。
+     * @param provider - 模型选择里的 provider。
+     * @param model - 模型 id。
+     * @returns `'grok'` 或 `'deepseek'`。
+     */
+    function meterKind(provider, model) {
+      const id = String(provider || '').toLowerCase();
+      const name = String(model || '').toLowerCase();
+      if (id === 'grok' || id.includes('grok') || name.includes('grok')) return 'grok';
+      return 'deepseek';
+    }
+
+    /**
+     * 从会话投影里取当前模型。DSH 的字段是 lastUsed / pending，不是 next。
+     * @param entry - projectionsBySession 的一条。
+     * @returns `{ provider, model }`。
+     */
+    function selectionOf(entry) {
+      const selection = entry && entry.values ? entry.values.modelSelection : undefined;
+      const current = selection && (selection.pending || selection.lastUsed || selection.next);
+      return {
+        provider: current && current.provider ? String(current.provider) : '',
+        model: current && current.model ? String(current.model) : '',
+      };
     }
 
     /** 某档位在某时刻生效的价格档与倍率。 */
@@ -413,7 +443,9 @@ window.__ModuleLoader__.load({
     const ZH = {
       'pill.tokens': 'tok',
       'pill.balance': '余',
+      'pill.grok': '剩',
       'pill.hint': '☀ 高峰 / 🌙 空闲 · 点击查看用量、费用与账户余额',
+      'pill.grokHint': 'Grok 本周剩余额度 · 点击查看周窗口',
       'settings.title': '显示设置',
       'settings.note': '修改立即生效，只调整显示方式，偏好保存在当前浏览器。',
       'settings.pillPeriod': '徽标显示时段图标',
@@ -451,6 +483,16 @@ window.__ModuleLoader__.load({
       'panel.keyFailed': 'API Key 兜底也未配置',
       'panel.balanceLoading': '查询中…',
       'panel.balanceRefresh': '刷新余额',
+      'panel.grokTitle': 'Grok 额度',
+      'panel.grokUsed': '本周已用',
+      'panel.grokRemaining': '本周剩余',
+      'panel.grokReset': '周窗口重置',
+      'panel.grokTier': '订阅',
+      'panel.grokProducts': '分项',
+      'panel.grokBuild': 'Build',
+      'panel.grokChat': 'Chat',
+      'panel.grokUnavailable': '暂时查不到 Grok 额度',
+      'panel.grokRefresh': '刷新额度',
       'panel.hit': '缓存命中',
       'panel.miss': '缓存未命中',
       'panel.write': '缓存写入',
@@ -478,7 +520,9 @@ window.__ModuleLoader__.load({
     const EN = {
       'pill.tokens': 'tok',
       'pill.balance': 'bal.',
+      'pill.grok': 'left',
       'pill.hint': '☀ peak / 🌙 off-peak · click for usage, cost and balance',
+      'pill.grokHint': 'Grok weekly quota left · click for the window',
       'settings.title': 'Display settings',
       'settings.note': 'Changes apply immediately to display only. Preferences stay in this browser.',
       'settings.pillPeriod': 'Period icon on the pill',
@@ -516,6 +560,16 @@ window.__ModuleLoader__.load({
       'panel.keyFailed': 'API key fallback also unavailable',
       'panel.balanceLoading': 'Loading…',
       'panel.balanceRefresh': 'Refresh balance',
+      'panel.grokTitle': 'Grok quota',
+      'panel.grokUsed': 'Used this week',
+      'panel.grokRemaining': 'Left this week',
+      'panel.grokReset': 'Weekly reset',
+      'panel.grokTier': 'Plan',
+      'panel.grokProducts': 'Breakdown',
+      'panel.grokBuild': 'Build',
+      'panel.grokChat': 'Chat',
+      'panel.grokUnavailable': 'Grok quota unavailable',
+      'panel.grokRefresh': 'Refresh quota',
       'panel.hit': 'Cache hit',
       'panel.miss': 'Cache miss',
       'panel.write': 'Cache write',
@@ -855,6 +909,43 @@ window.__ModuleLoader__.load({
         balanceBusy: busy, loadBalance: () => load(true) };
     }
 
+    /**
+     * Grok 周额度。只在当前模型是 Grok 时请求，DeepSeek 会话不打网关。
+     * @param active - 当前是否 Grok。
+     * @param open - 面板是否打开。
+     * @returns 额度、错误、忙状态和刷新函数。
+     */
+    function useGrokQuota(active, open) {
+      const [quota, setQuota] = useState(null);
+      const [error, setError] = useState(null);
+      const [busy, setBusy] = useState(false);
+      const load = useCallback(async () => {
+        setBusy(true);
+        const controller = new AbortController();
+        try {
+          const data = await withDeadline(async () => {
+            const response = await fetch(GROK_API, { method: 'POST', signal: controller.signal });
+            return response.json();
+          });
+          if (data && data.ok && data.kind === 'grok') {
+            setQuota(data);
+            setError(null);
+          } else {
+            setError(data && data.error ? String(data.error) : 'Grok quota unavailable');
+          }
+        } catch (caught) {
+          setError(errorText(caught));
+        } finally {
+          controller.abort();
+          setBusy(false);
+        }
+      }, []);
+      useEffect(() => {
+        if (active) load();
+      }, [active, open, load]);
+      return { grokQuota: quota, grokError: error, grokBusy: busy, loadGrok: load };
+    }
+
     // ========================================================================
     // 6. 组件
     // ========================================================================
@@ -921,6 +1012,19 @@ window.__ModuleLoader__.load({
       },
       h('path', { d: 'M13 8a5 5 0 1 1-1.55-3.6' }),
       h('path', { d: 'M13.3 2.5v2.7h-2.7' }));
+    }
+
+    /**
+     * 胶囊上的额度图标。和旁边原生统计胶囊一样：14px、currentColor、圆头描边。
+     * @returns 内联 SVG。
+     */
+    function QuotaIcon() {
+      return h('svg', {
+        viewBox: '0 0 16 16', width: 14, height: 14, 'aria-hidden': true, fill: 'none', stroke: 'currentColor',
+        strokeWidth: 1, strokeLinecap: 'round', strokeLinejoin: 'round',
+      },
+      h('circle', { cx: 8, cy: 8, r: 5.4 }),
+      h('path', { d: 'M8 4.6v3.6l2.2 1.4' }));
     }
 
     /** 图标：与宿主同一套描边语言（16 视框、currentColor、圆头）。 */
@@ -1116,20 +1220,22 @@ window.__ModuleLoader__.load({
       // 的路径一致；取不到就按 pro 档并在面板里说明，不静默乱猜。
       const useSessions = typeof props.useSessions === 'function' ? props.useSessions : () => undefined;
       const sessionId = props.sessionId;
-      const model = useSessions((state) => {
+      const selection = useSessions((state) => {
         try {
           const entry = state && state.projectionsBySession && sessionId !== undefined
             ? state.projectionsBySession[sessionId] : undefined;
-          const selection = entry && entry.values ? entry.values.modelSelection : undefined;
-          return selection && selection.next ? selection.next.model : undefined;
+          return selectionOf(entry);
         } catch {
-          return undefined;
+          return { provider: '', model: '' };
         }
-      });
+      }) || { provider: '', model: '' };
+      const model = selection.model || undefined;
+      const grokMode = meterKind(selection.provider, selection.model) === 'grok';
 
       const [now, setNow] = useState(() => Date.now());
       const [open, setOpen] = useState(false);
-      const { balance, balanceError, accountError, balanceBusy, loadBalance } = useBalance(open);
+      const { balance, balanceError, accountError, balanceBusy, loadBalance } = useBalance(grokMode ? false : open);
+      const { grokQuota, grokError, grokBusy, loadGrok } = useGrokQuota(grokMode, open);
       const rootRef = useRef(null);
       const panelRef = useRef(null);
       const panelId = useId();
@@ -1247,6 +1353,50 @@ window.__ModuleLoader__.load({
         h('div', { className: 'umSect' }, t('panel.byModel')),
         h('dl', { className: 'umDetails' }, modelRowNodes(modelRows)));
 
+      const grokRemaining = grokQuota && Number.isFinite(Number(grokQuota.remainingPercent))
+        ? Math.round(Number(grokQuota.remainingPercent))
+        : null;
+      const grokUsed = grokQuota && Number.isFinite(Number(grokQuota.usedPercent))
+        ? Math.round(Number(grokQuota.usedPercent))
+        : null;
+      const grokText = grokRemaining === null ? null : t('pill.grok') + ' ' + String(grokRemaining) + '%';
+      const grokResetText = grokQuota && grokQuota.periodEnd
+        ? new Date(grokQuota.periodEnd).toLocaleString()
+        : '';
+      const grokProductText = (grokQuota && Array.isArray(grokQuota.products) ? grokQuota.products : [])
+        .map((item) => {
+          const name = String(item.product || '');
+          const label = name === 'GrokBuild' ? t('panel.grokBuild') : (name === 'GrokChat' ? t('panel.grokChat') : name);
+          return label + ' ' + String(Math.round(Number(item.usedPercent))) + '%';
+        })
+        .join(' · ');
+      const grokPanelBody = h(React.Fragment, null,
+        h('div', { className: 'umTitle' },
+          h('span', { className: 'umTitleLabel' }, h(MeterIcon), t('panel.grokTitle')),
+          h('span', { className: 'umTitleValue' }, grokText === null ? '—' : grokText),
+          h('button', { className: 'umClose', type: 'button', title: t('panel.close'),
+            'aria-label': t('panel.close'), onClick: closePanel }, '×')),
+        h('div', { className: 'umTitleRule', 'aria-hidden': true }),
+        h('dl', { className: 'umDetails' },
+          h('dt', null, t('panel.grokRemaining')),
+          h('dd', null, grokText !== null
+            ? h(React.Fragment, null,
+              h('span', null, grokText),
+              h('button', {
+                type: 'button', className: 'umRefresh', title: t('panel.grokRefresh'),
+                'aria-label': t('panel.grokRefresh'), disabled: grokBusy, onClick: loadGrok,
+              }, h(RefreshIcon)))
+            : h('span', { title: grokError || undefined },
+              grokBusy ? t('panel.balanceLoading') : t('panel.grokUnavailable'))),
+          grokUsed === null ? null : h('dt', null, t('panel.grokUsed')),
+          grokUsed === null ? null : h('dd', null, String(grokUsed) + '%'),
+          grokQuota && grokQuota.tier ? h('dt', null, t('panel.grokTier')) : null,
+          grokQuota && grokQuota.tier ? h('dd', null, String(grokQuota.tier)) : null,
+          grokResetText ? h('dt', null, t('panel.grokReset')) : null,
+          grokResetText ? h('dd', null, grokResetText) : null,
+          grokProductText ? h('dt', null, t('panel.grokProducts')) : null,
+          grokProductText ? h('dd', null, grokProductText) : null));
+
       const portalHost = typeof document === 'undefined' ? null : (document.body || document.documentElement);
       const panel = open && portalHost !== null ? createPortal(h('div', {
         ref: panelRef,
@@ -1256,6 +1406,7 @@ window.__ModuleLoader__.load({
         'aria-label': t('panel.title'),
         style: pos === null ? MEASURE_STYLE : pos,
       },
+      grokMode ? grokPanelBody : h(React.Fragment, null,
       h('div', { className: 'umTitle' },
         h('span', { className: 'umTitleLabel' }, h(MeterIcon), t('panel.title')),
         h('span', { className: 'umTitleValue', title: totalTitle }, totalText),
@@ -1312,18 +1463,22 @@ window.__ModuleLoader__.load({
       h('div', { className: 'umAxis' },
         h('span', null, '00:00'), h('span', null, '06:00'), h('span', null, '12:00'),
         h('span', null, '18:00'), h('span', null, '24:00')),
-      moneyNote), portalHost) : null;
+      moneyNote)), portalHost) : null;
 
       // 三段全关或仅显示余额但余额不可用时，费用段兜底，保留可见入口。
-      const showCost = settings.pillCost || (!settings.pillPeriod && (!settings.pillBalance || balanceText === null));
+      const showCost = !grokMode && (settings.pillCost || (!settings.pillPeriod && (!settings.pillBalance || balanceText === null)));
       /** 各段：`[类型, 内容]`。图标与文字分开标注，才能只给文字段之间放点。 */
       const pillSegments = [];
-      if (settings.pillPeriod) {
+      if (!grokMode && settings.pillPeriod) {
         pillSegments.push(['icon', h(PeriodIcon, { key: 'period', peak: rate.peak })]);
       }
       if (showCost) pillSegments.push(['text', totalText]);
-      if (settings.pillBalance && balanceText !== null) {
+      if (!grokMode && settings.pillBalance && balanceText !== null) {
         pillSegments.push(['text', t('pill.balance') + ' ' + balanceText]);
+      }
+      if (grokMode) {
+        pillSegments.push(['icon', h(QuotaIcon, { key: 'quota' })]);
+        pillSegments.push(['text', grokText === null ? '—' : grokText]);
       }
       const dots = separatorBefore(pillSegments.map(([kind]) => kind));
       // **按官方结构组装**：图标是 pill 的 flex 子元素，文字段与分隔点则**同包在一个
@@ -1349,11 +1504,13 @@ window.__ModuleLoader__.load({
           h('button', {
             type: 'button',
             className: 'umPill',
-            title: t('pill.hint'),
+            title: grokMode ? t('pill.grokHint') : t('pill.hint'),
             'aria-haspopup': 'dialog',
             'aria-expanded': open,
-            'aria-label': totalText + ' · ' + stateText
-              + (balanceText === null ? '' : ' · ' + t('pill.balance') + ' ' + balanceText),
+            'aria-label': grokMode
+              ? (grokText === null ? t('panel.grokUnavailable') : grokText)
+              : totalText + ' · ' + stateText
+                + (balanceText === null ? '' : ' · ' + t('pill.balance') + ' ' + balanceText),
             'aria-controls': open ? panelId : undefined,
             onClick: () => setOpen((previous) => !previous),
           },

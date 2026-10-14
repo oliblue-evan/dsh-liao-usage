@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Usage & Balance",
-    "description": "View session tokens, reference costs using DeepSeek rates and account balance; explore model details and customize the bottom pill."
+    "description": "DeepSeek shows session cost and account balance; Grok shows weekly quota left. The gateway password stays in the host process."
   }
 }

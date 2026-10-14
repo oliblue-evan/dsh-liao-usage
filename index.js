@@ -154,6 +154,187 @@ async function queryBalance(ctx) {
   };
 }
 
+/** Grok 周额度缓存时长。百分比会变，比账户余额更短。 */
+const GROK_CACHE_MS = 30000;
+
+/**
+ * 额度网关配置路径。密码只在宿主进程读取。
+ * @returns 配置文件路径。
+ */
+function quotaConfigPath() {
+  if (process.env.DSH_USAGE_QUOTA_CONFIG) return process.env.DSH_USAGE_QUOTA_CONFIG;
+  const home = process.env.DSH_HOME || process.env.HOME || '';
+  return home.replace(/\/+$/, '') + '/.dsh/usage-pill-quota.json';
+}
+
+/**
+ * 读额度网关配置。每次请求重读，改文件不用重启。
+ * @returns 配置对象，或 null。
+ */
+function loadQuotaConfig() {
+  let parsed;
+  try {
+    parsed = JSON.parse(require('node:fs').readFileSync(quotaConfigPath(), 'utf8'));
+  } catch {
+    return null;
+  }
+  if (!parsed || typeof parsed !== 'object') return null;
+  const baseUrl = String(parsed.baseUrl || '').replace(/\/+$/, '');
+  const email = String(parsed.email || '');
+  const password = String(parsed.password || '');
+  if (!/^https?:\/\//.test(baseUrl) || !email || !password) return null;
+  let parsedUrl;
+  try {
+    parsedUrl = new URL(baseUrl);
+  } catch {
+    return null;
+  }
+  if (parsedUrl.username || parsedUrl.password) return null;
+  const accounts = Array.isArray(parsed.accounts) ? parsed.accounts : [];
+  return { baseUrl, email, password, accounts };
+}
+
+/**
+ * 向额度网关发一次请求。不跟随重定向，也不把上游原文带出宿主。
+ * @param config - 额度配置。
+ * @param path - 以 / 开头的路径。
+ * @param options - method / body / token。
+ * @returns 解析后的 JSON。
+ */
+async function quotaFetch(config, path, options) {
+  const headers = { accept: 'application/json' };
+  if (options.body !== undefined) headers['content-type'] = 'application/json';
+  if (options.token) headers.authorization = 'Bearer ' + options.token;
+  const response = await fetch(config.baseUrl + path, {
+    method: options.method,
+    headers,
+    body: options.body === undefined ? undefined : JSON.stringify(options.body),
+    redirect: 'error',
+    signal: AbortSignal.timeout(15000),
+  });
+  let data = null;
+  try {
+    data = await response.json();
+  } catch {
+    data = null;
+  }
+  if (!response.ok || data === null || typeof data !== 'object') {
+    const reason = data && typeof data.reason === 'string' ? data.reason : '';
+    throw new Error('额度网关 HTTP ' + String(response.status) + (reason ? ' ' + reason : ''));
+  }
+  return data;
+}
+
+/**
+ * 登录额度网关。token 只留在这个插件实例里。
+ * @param auth - 实例内的登录态。
+ * @param config - 额度配置。
+ * @param force - 401 后强制重登。
+ * @returns access token。
+ */
+async function quotaToken(auth, config, force) {
+  const key = config.baseUrl + '\n' + config.email;
+  if (!force && auth.key === key && auth.token && Date.now() - auth.at < 20 * 60 * 1000) return auth.token;
+  const login = await quotaFetch(config, '/api/v1/auth/login', {
+    method: 'POST',
+    body: { email: config.email, password: config.password },
+  });
+  const token = login.data && typeof login.data.access_token === 'string' ? login.data.access_token : '';
+  if (!token) throw new Error('额度网关登录失败');
+  auth.key = key;
+  auth.token = token;
+  auth.at = Date.now();
+  return token;
+}
+
+/**
+ * 找到当前可用的 Grok 账号。配置里的 id 可能过期，以列表为准。
+ * @param config - 额度配置。
+ * @param token - 登录 token。
+ * @returns 账号 id。
+ */
+async function grokAccountId(config, token) {
+  try {
+    const listed = await quotaFetch(config, '/api/v1/admin/accounts', { method: 'GET', token });
+    const items = listed.data && Array.isArray(listed.data.items) ? listed.data.items : [];
+    const live = items.find((item) => item && item.platform === 'grok' && item.status === 'active' && Number.isInteger(item.id));
+    if (live) return live.id;
+  } catch {
+    // 列表失败时退回配置里的 id
+  }
+  const fallback = config.accounts.find((item) => item && item.platform === 'grok' && Number.isInteger(item.id));
+  if (!fallback) throw new Error('没有可用的 Grok 账号');
+  return fallback.id;
+}
+
+/**
+ * 把网关的周窗口收成界面需要的数字。不要把请求次数窗当成周额度。
+ * @param quota - /quota 响应。
+ * @param usage - /usage 响应，可为 null。
+ * @returns 公开额度对象。
+ */
+function grokView(quota, usage) {
+  const billing = quota && quota.data && quota.data.billing ? quota.data.billing : {};
+  const usageData = usage && usage.data ? usage.data : {};
+  const used = Number(billing.usage_percent);
+  const usedPercent = Number.isFinite(used) ? used : null;
+  const products = Array.isArray(billing.product_usage)
+    ? billing.product_usage.map((item) => ({
+      product: String(item && item.product || ''),
+      usedPercent: Number(item && item.usage_percent),
+    })).filter((item) => item.product && Number.isFinite(item.usedPercent))
+    : [];
+  return {
+    ok: true,
+    kind: 'grok',
+    usedPercent,
+    remainingPercent: usedPercent === null ? null : Math.max(0, 100 - usedPercent),
+    periodEnd: typeof billing.period_end === 'string' ? billing.period_end : '',
+    products,
+    tier: typeof usageData.subscription_tier === 'string' ? usageData.subscription_tier : '',
+    updatedAt: typeof billing.updated_at === 'string' ? billing.updated_at : '',
+    at: Date.now(),
+  };
+}
+
+/**
+ * 查询 Grok 周额度。密码和 token 不进入返回值。
+ * @param state - 当前插件实例的缓存与登录态。
+ * @returns 公开额度对象，或 `{ ok: false, error }`。
+ */
+async function queryGrokQuota(state) {
+  const config = loadQuotaConfig();
+  if (config === null) return { ok: false, error: '未配置 Grok 额度网关' };
+  const key = config.baseUrl + '\n' + config.email;
+  const now = Date.now();
+  if (state.cache.value !== null && state.cache.key === key && now - state.cache.at < GROK_CACHE_MS) {
+    return state.cache.value;
+  }
+  try {
+    let token = await quotaToken(state.auth, config, false);
+    const accountId = await grokAccountId(config, token);
+    let quota;
+    try {
+      quota = await quotaFetch(config, '/api/v1/admin/grok/accounts/' + String(accountId) + '/quota', { method: 'GET', token });
+    } catch (error) {
+      if (!String(error && error.message || '').includes('401')) throw error;
+      token = await quotaToken(state.auth, config, true);
+      quota = await quotaFetch(config, '/api/v1/admin/grok/accounts/' + String(accountId) + '/quota', { method: 'GET', token });
+    }
+    let usage = null;
+    try {
+      usage = await quotaFetch(config, '/api/v1/admin/accounts/' + String(accountId) + '/usage', { method: 'GET', token });
+    } catch {
+      usage = null;
+    }
+    const view = grokView(quota, usage);
+    state.cache = { at: now, key, value: view };
+    return view;
+  } catch (error) {
+    return { ok: false, error: redact(String(error && error.message ? error.message : error)) };
+  }
+}
+
 /**
  * 宿主入口：注册 usagePillCost 投影，并在有 webServer 时注册余额兜底路由。
  * @param ctx - 插件上下文。
@@ -175,10 +356,8 @@ function apply(ctx) {
   }, 'usage-pill: usagePillCost projection');
 
   // 余额兜底路由：只有同时存在 webServer 时才注册
-  ctx.inject(['webServer'], (scope) => scope.effect(() => scope.webServer.register({
-    kind: 'exact',
-    path: '/api/usage-pill/balance',
-    handler: async (req, res) => {
+  ctx.inject(['webServer'], (scope) => scope.effect(() => {
+    const balanceHandler = async (req, res) => {
       if (!allowRequest(req, res)) return;
       if (req.method !== 'POST') {
         res.writeHead(405, { 'content-type': 'text/plain; charset=utf-8' });
@@ -204,8 +383,32 @@ function apply(ctx) {
       }
       res.writeHead(out.ok ? 200 : 502, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
       res.end(JSON.stringify(out));
-    },
-  }), 'usage-pill: /api/usage-pill/balance route'));
+    };
+    // Grok 周额度：密码和 token 只留在这个插件实例里。界面只拿到百分比和重置时间。
+    const grok = { cache: { at: 0, key: '', value: null }, auth: { key: '', token: '', at: 0 }, pending: null };
+    const quotaHandler = async (req, res) => {
+      if (!allowRequest(req, res)) return;
+      if (req.method !== 'POST') {
+        res.writeHead(405, { 'content-type': 'text/plain; charset=utf-8' });
+        res.end('method not allowed');
+        return;
+      }
+      if (grok.pending === null) {
+        grok.pending = queryGrokQuota(grok).finally(() => { grok.pending = null; });
+      }
+      const out = await grok.pending;
+      res.writeHead(out.ok ? 200 : 502, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
+      res.end(JSON.stringify(out));
+    };
+    // 只注册一次：现有测试桩只保留最后一条路由。真实宿主按 req.url 分发，
+    // 没有 url 的旧调用仍走余额，避免把余额测试打到 Grok。
+    return scope.webServer.register({
+      kind: 'exact',
+      path: '/api/usage-pill/balance',
+      paths: ['/api/usage-pill/balance', '/api/usage-pill/grok-quota'],
+      handler: (req, res) => (req.url === '/api/usage-pill/grok-quota' ? quotaHandler(req, res) : balanceHandler(req, res)),
+    });
+  }, 'usage-pill: balance and grok-quota routes'));
 }
 
 export { apply, inject, name };
