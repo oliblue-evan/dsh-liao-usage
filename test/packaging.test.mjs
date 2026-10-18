@@ -2,7 +2,7 @@
  * 打包契约：插件页的「介绍」与图标能不能被宿主读到，取决于 package.json 里几处声明。
  *
  * 我在这里翻过一次车：`exports` 只开了 `.` 和 `./client`，于是
- * `dsh-usage-pill/package.json` 与 `dsh-usage-pill/locale/en.json` 都被 Node 的
+ * `dsh-liao-usage/package.json` 与 `dsh-liao-usage/locale/en.json` 都被 Node 的
  * ESM 解析器拒掉（`ERR_PACKAGE_PATH_NOT_EXPORTED`），而 `dsh-app-boot` 的
  * `resolvePluginResource` 恰恰把「不可解析」当作「资源缺失」→ 元数据整体为 undefined
  * → 插件页既不显示介绍、也不显示图标，却**不报任何错**。所以这里把契约钉死。

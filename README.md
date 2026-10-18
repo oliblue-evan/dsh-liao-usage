@@ -1,11 +1,11 @@
-# dsh-usage-pill 🧮
+# dsh-liao-usage 🧮
 
 > **English quick start** — A DSH plugin that shows session **token usage**, **reference costs using DeepSeek rates at each request time and model tier** (peak/off-peak, per model tier), and your
 > **account balance** in one pill below the composer. It needs **no API key** when you are
 > signed in to a DeepSeek account (it reads the account balance through the harness's own
 > account remote, falling back to `DEEPSEEK_API_KEY`). It is a single-file client bundle
 > with a dependency-free host half, and ships 71 assertions (`npm test`). MIT licensed.
-> Install: `plugin_manager(action: "install_bundle", target: "github:oliblue-evan/dsh-usage-pill")`, then
+> Install: `plugin_manager(action: "install_bundle", target: "github:oliblue-evan/dsh-liao-usage")`, then
 > reload the page.
 
 
@@ -253,7 +253,7 @@ const cacheWriteTokens = rawUsage.prompt_tokens_details?.cache_write_tokens || 0
 
 这几个文件都按契约备齐了，并对解析链路做过两次实测：**纯 Node** 与
 **Electron 自带 Node（`ELECTRON_RUN_AS_NODE`，node 24.18.1，即宿主运行时）**——
-`ModuleLoader.fromInternal()` 可用、`resolveSync('dsh-usage-pill/locale/en.json', …)`
+`ModuleLoader.fromInternal()` 可用、`resolveSync('dsh-liao-usage/locale/en.json', …)`
 正确解析到本包，把 `readPluginMeta` 原样搬出来跑，输出是正确的双语标题/描述/图标。
 
 > **两个坑，都记在这里**
@@ -338,7 +338,7 @@ const cacheWriteTokens = rawUsage.prompt_tokens_details?.cache_write_tokens || 0
 
 ```bash
 # 1) profile 里是符号链接还是物理副本？（link: 安装也可能被物化成副本）
-ls -la ~/.dsh/profiles/<profile>/node_modules/dsh-usage-pill
+ls -la ~/.dsh/profiles/<profile>/node_modules/dsh-liao-usage
 
 # 2) 拿权威的 bundle 地址（graph 里有每个客户端条目的 id 与 rev）
 curl -s -N --max-time 4 http://127.0.0.1:19387/plugins/events
@@ -383,14 +383,14 @@ curl -s "http://127.0.0.1:19387/plugins/<id>/client.js&rev=<rev>"
 
 ```text
 ① GitHub（推荐，随仓库更新）
-   plugin_manager(action: "install_bundle", target: "github:oliblue-evan/dsh-usage-pill")
-   或在 profile 目录执行：dsh plugin --profile <profile> add github:oliblue-evan/dsh-usage-pill
+   plugin_manager(action: "install_bundle", target: "github:oliblue-evan/dsh-liao-usage")
+   或在 profile 目录执行：dsh plugin --profile <profile> add github:oliblue-evan/dsh-liao-usage
 
 ② 本地克隆（开发时）
    plugin_manager(action: "install_bundle", target: "<克隆下来的目录绝对路径>")
 
 ③ 卸载
-   plugin_manager(action: "remove_bundle", target: "dsh-usage-pill")
+   plugin_manager(action: "remove_bundle", target: "dsh-liao-usage")
 ```
 
 安装后**刷新页面**即可；若插件页的标题/简介没显示，说明宿主侧的包元数据快照是旧的，
@@ -421,7 +421,7 @@ curl -s "http://127.0.0.1:19387/plugins/<id>/client.js&rev=<rev>"
 
 - `node --check` 全部文件通过。
 - 安装后 live 校验：宿主行挂载、`conversation.composer.dock` 出现 `usage-pill` 占位者、
-  `plugins.bundle.config` 出现 `dsh-usage-pill` 占位者、
+  `plugins.bundle.config` 出现 `dsh-liao-usage` 占位者、
   余额路由的同源校验与 POST 语义（同源 200 / 跨站 403 / GET 405）。
 - **宿主半边已实测通过**（重启 DSH 后核对 `~/.dsh/storages/session_projcache/` 的落盘投影）：
   `usagePillCost` 与官方 `tokenUsage` 的 `seq` 同步，且金额与官方 token 桶逐个对账一致 ——

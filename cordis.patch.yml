@@ -4,4 +4,4 @@
 # 用量读取、费用展示与全部界面在浏览器半边完成。
 - insert:
     - id: usage-pill
-      name: 'dsh-usage-pill'
+      name: 'dsh-liao-usage'

@@ -63,7 +63,7 @@ function allowRequest(req, res) {
   const hostname = host.replace(/:\d+$/, '').replace(/^\[|\]$/g, '').toLowerCase();
   if (hostname !== '127.0.0.1' && hostname !== 'localhost' && hostname !== '::1') {
     res.writeHead(403, { 'content-type': 'text/plain; charset=utf-8' });
-    res.end('dsh-usage-pill: forbidden host');
+    res.end('dsh-liao-usage: forbidden host');
     return false;
   }
   const origin = req.headers.origin;
@@ -78,14 +78,14 @@ function allowRequest(req, res) {
       const originHost = parsed.hostname.replace(/^\[|\]$/g, '').toLowerCase();
       if (originHost !== '127.0.0.1' && originHost !== 'localhost' && originHost !== '::1') {
         res.writeHead(403, { 'content-type': 'text/plain; charset=utf-8' });
-        res.end('dsh-usage-pill: cross-origin request rejected');
+        res.end('dsh-liao-usage: cross-origin request rejected');
         return false;
       }
     }
   }
   if (String(req.headers['sec-fetch-site'] || '').toLowerCase() === 'cross-site') {
     res.writeHead(403, { 'content-type': 'text/plain; charset=utf-8' });
-    res.end('dsh-usage-pill: cross-site request rejected');
+    res.end('dsh-liao-usage: cross-site request rejected');
     return false;
   }
   return true;

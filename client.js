@@ -32,7 +32,7 @@
  */
 
 window.__ModuleLoader__.load({
-  id: 'dsh-usage-pill',
+  id: 'dsh-liao-usage',
   factory(require) {
     const React = require('react');
     const h = React.createElement;
@@ -1555,7 +1555,7 @@ window.__ModuleLoader__.load({
         // 结果是「组件还在、样式没了」：胶囊退化成撑满容器的巨型图标 + 挤在一起的文字。
         ctx.effect(() => ctx.slots.inject('plugins.bundle.config', () => ctx.slots.register({
           name: 'plugins.bundle.config',
-          key: 'dsh-usage-pill',
+          key: 'dsh-liao-usage',
           locale: NS,
         }, UsageMeterSettings)), 'usage-pill: settings card');
         ctx.effect(() => ctx.slots.inject('conversation.composer.dock', () => ctx.slots.register({
