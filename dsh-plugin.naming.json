@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "policy": "dsh-plugin-naming/v1",
+  "plugin": {
+    "namespace": "liao",
+    "name": "usage",
+    "coordinate": "liao/usage",
+    "packageName": "dsh-liao-usage"
+  },
+  "names": {
+    "pluginNames": [
+      "usage-pill"
+    ],
+    "loaderIds": [
+      "usage-pill"
+    ],
+    "services": [],
+    "tools": [],
+    "commands": [],
+    "skills": [],
+    "skillProviders": [],
+    "events": [],
+    "settingsNamespaces": [],
+    "routes": [
+      {
+        "kind": "exact",
+        "path": "/api/usage-pill/balance"
+      },
+      {
+        "kind": "exact",
+        "path": "/api/usage-pill/grok-quota"
+      }
+    ]
+  }
+}
